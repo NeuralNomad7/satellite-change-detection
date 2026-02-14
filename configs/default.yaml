@@ -1,0 +1,80 @@
+# =============================================================================
+# Satellite Change Detection - Default Training Configuration
+# =============================================================================
+
+# Experiment metadata
+experiment:
+  name: "siamese_unet_levir"
+  description: "Siamese U-Net with ResNet-34 encoder on LEVIR-CD"
+  seed: 42
+
+# Model architecture
+model:
+  name: "SiameseUNet"
+  encoder: "resnet34"
+  pretrained: true
+  # Number of input spectral bands per image
+  # 3 for RGB, 13 for full Sentinel-2
+  in_channels: 3
+  # Number of output classes (1 for binary change detection)
+  num_classes: 1
+  # Feature fusion strategy: "diff" | "concat" | "both"
+  fusion: "both"
+  # Use deep supervision during training
+  deep_supervision: true
+
+# Training hyperparameters
+training:
+  epochs: 100
+  batch_size: 16
+  num_workers: 4
+  # Mixed precision training (FP16) - halves memory usage
+  mixed_precision: true
+
+  # Optimizer
+  optimizer:
+    name: "adamw"
+    lr: 1.0e-4
+    weight_decay: 1.0e-4
+    betas: [0.9, 0.999]
+
+  # Learning rate scheduler
+  scheduler:
+    name: "cosine_warmup"
+    warmup_epochs: 5
+    min_lr: 1.0e-6
+    # Restart period for cosine annealing
+    T_0: 20
+    T_mult: 2
+
+  # Loss function
+  loss:
+    name: "bce_dice"
+    bce_weight: 0.5
+    dice_weight: 0.5
+
+  # Early stopping
+  early_stopping:
+    patience: 15
+    metric: "f1"
+    mode: "max"
+
+# Evaluation
+evaluation:
+  # Threshold to binarize predictions (sigmoid output -> 0/1)
+  threshold: 0.5
+  metrics: ["f1", "iou", "precision", "recall", "accuracy"]
+
+# Paths
+paths:
+  data_root: "data"
+  checkpoint_dir: "models/checkpoints"
+  results_dir: "results"
+  log_dir: "runs"
+
+# Logging
+logging:
+  tensorboard: true
+  log_interval: 10  # Log every N batches
+  save_interval: 5  # Save checkpoint every N epochs
+  save_best: true
