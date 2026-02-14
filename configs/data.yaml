@@ -1,0 +1,73 @@
+# =============================================================================
+# Dataset Configuration
+# =============================================================================
+
+dataset:
+  name: "LEVIR-CD"
+  root: "data/raw"
+
+  # Directory structure inside root
+  # Each split should have: A/ (pre-change), B/ (post-change), label/ (masks)
+  splits:
+    train: "train"
+    val: "val"
+    test: "test"
+
+# Preprocessing
+preprocessing:
+  # Patch size for training (images are cropped to this size)
+  patch_size: 256
+  # Stride for patch extraction (< patch_size means overlapping patches)
+  patch_stride: 256
+  # Resize original images before patching (null = no resize)
+  resize: null
+
+  # Normalization strategy: "imagenet" | "dataset" | "minmax"
+  # "imagenet" uses ImageNet mean/std (good for pretrained RGB encoders)
+  # "dataset" computes mean/std from training data (better for multispectral)
+  # "minmax" scales to [0, 1] range
+  normalization: "imagenet"
+
+  # ImageNet statistics (for RGB bands only)
+  imagenet_mean: [0.485, 0.456, 0.406]
+  imagenet_std: [0.229, 0.224, 0.225]
+
+  # Sentinel-2 band selection
+  # Indices into the 13-band stack. Use [1, 2, 3] for RGB (B02, B03, B04)
+  bands: [1, 2, 3]
+
+# Augmentations (applied to both images and label simultaneously)
+augmentation:
+  enabled: true
+
+  # Geometric transforms
+  horizontal_flip: 0.5
+  vertical_flip: 0.5
+  random_rotate_90: 0.5
+
+  # Photometric transforms (applied identically to both T1 and T2)
+  brightness_contrast:
+    enabled: true
+    brightness_limit: 0.2
+    contrast_limit: 0.2
+    probability: 0.3
+
+  gaussian_noise:
+    enabled: true
+    var_limit: [10.0, 50.0]
+    probability: 0.2
+
+  # Random crop (if images are larger than patch_size)
+  random_crop:
+    enabled: true
+    size: 256
+
+# Class balance
+# Change detection datasets are heavily imbalanced (few "changed" pixels).
+# These settings help address that.
+class_balance:
+  # Oversample patches that contain changes
+  oversample_changed: true
+  oversample_ratio: 2.0
+  # Minimum percentage of changed pixels to consider a patch "changed"
+  min_change_fraction: 0.01
