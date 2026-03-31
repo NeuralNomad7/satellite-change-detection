@@ -45,6 +45,7 @@ setup(
         "console_scripts": [
             "sat-cd-train=src.train:main",
             "sat-cd-eval=src.eval:main",
+            "sat-cd-export=scripts.export_onnx:main",
         ],
     },
 )

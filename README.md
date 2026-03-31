@@ -1,6 +1,10 @@
 # Satellite Imagery Change Detection
 
-A deep learning pipeline for detecting land-use and land-cover changes from multi-temporal Sentinel-2 satellite imagery. Built with PyTorch, this project implements a Siamese U-Net architecture that compares bi-temporal image pairs to produce pixel-level change maps.
+A production-ready deep learning pipeline for detecting land-use and land-cover changes from multi-temporal Sentinel-2 satellite imagery. Built with PyTorch, this project implements a Siamese U-Net architecture that compares bi-temporal image pairs to produce pixel-level change maps -- from training to deployment.
+
+[![CI](https://github.com/neuralnomad7/satellite-change-detection/actions/workflows/ci.yml/badge.svg)](https://github.com/neuralnomad7/satellite-change-detection/actions)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ## Why Change Detection Matters
 
@@ -12,35 +16,40 @@ This project focuses on Sentinel-2 imagery (10m resolution, 13 spectral bands), 
 
 ```
 satellite-change-detection/
-├── src/
-│   ├── config.py          # Configuration management
-│   ├── data_loader.py     # Dataset classes and data pipeline
-│   ├── models.py          # Siamese U-Net architecture
-│   ├── train.py           # Training loop with mixed precision
-│   ├── eval.py            # Evaluation and inference
-│   └── utils.py           # Visualization and metric helpers
-├── notebooks/
-│   ├── 01_eda.ipynb       # Exploratory data analysis
-│   ├── 02_training.ipynb  # Interactive training workflow
-│   └── 03_inference.ipynb # Run inference and visualize results
-├── configs/
-│   ├── default.yaml       # Full training configuration
-│   └── data.yaml          # Dataset paths and preprocessing
-├── data/                  # Raw and processed imagery
-├── models/                # Saved checkpoints
-├── results/               # Predictions and visualizations
-└── tests/                 # Unit and integration tests
+├── src/                           # Core ML pipeline
+│   ├── config.py                  # YAML config management with dataclasses
+│   ├── data_loader.py             # Dataset + augmentation pipeline
+│   ├── models.py                  # Siamese U-Net architecture
+│   ├── train.py                   # Training loop (AMP, deep supervision)
+│   ├── eval.py                    # Evaluation and inference
+│   └── utils.py                   # Metrics and visualization
+├── serving/                       # Production API
+│   └── app.py                     # FastAPI inference endpoint
+├── scripts/
+│   └── export_onnx.py             # ONNX export + benchmark
+├── notebooks/                     # Interactive workflows
+│   ├── 01_eda.ipynb               # Exploratory data analysis
+│   ├── 02_training.ipynb          # Training walkthrough
+│   └── 03_inference.ipynb         # Inference visualization
+├── .github/workflows/ci.yml       # CI/CD pipeline
+├── streamlit_app.py               # Interactive demo UI
+├── Dockerfile                     # API container
+├── Dockerfile.streamlit           # Demo container
+├── docker-compose.yml             # Full stack orchestration
+├── configs/                       # YAML configuration
+├── tests/                         # Unit + integration tests
+└── data/                          # Raw and processed imagery
 ```
 
 ## Installation
 
 ```bash
-git clone https://github.com/yourusername/satellite-change-detection.git
+git clone https://github.com/neuralnomad7/satellite-change-detection.git
 cd satellite-change-detection
 
 # Create environment
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+source venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
@@ -59,22 +68,32 @@ Download Sentinel-2 image pairs and change labels (see [DATA.md](DATA.md) for so
 python -m src.train --config configs/default.yaml
 ```
 
-Or use the training notebook for an interactive walkthrough:
-
-```bash
-jupyter notebook notebooks/02_training.ipynb
-```
-
 ### 3. Evaluate
 
 ```bash
 python -m src.eval --config configs/default.yaml --checkpoint models/checkpoints/best_model.pth
 ```
 
-### 4. Visualize
+### 4. Interactive Demo
 
 ```bash
-jupyter notebook notebooks/03_inference.ipynb
+streamlit run streamlit_app.py
+```
+
+### 5. Deploy as API
+
+```bash
+# With Docker
+docker compose up
+
+# Or directly
+uvicorn serving.app:app --host 0.0.0.0 --port 8000
+```
+
+### 6. Export to ONNX
+
+```bash
+python scripts/export_onnx.py --checkpoint models/checkpoints/best_model.pth
 ```
 
 ## Model Architecture
@@ -82,10 +101,11 @@ jupyter notebook notebooks/03_inference.ipynb
 The core model is a **Siamese U-Net** -- two weight-sharing encoder branches process pre-change and post-change images independently, then their features are fused and decoded into a binary change mask. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design rationale.
 
 Key features:
-- ResNet-34 encoder backbone (pretrained on ImageNet)
-- Feature-level difference and concatenation fusion
-- Deep supervision at multiple decoder scales
-- Mixed-precision training support
+- **ResNet-34 encoder** pretrained on ImageNet, adapted for multispectral input
+- **Feature fusion** via absolute difference + concatenation at every scale
+- **Deep supervision** at 4 decoder levels for multi-scale gradient signal
+- **Mixed-precision (FP16)** training with gradient scaling
+- **ONNX export** with dynamic axes for flexible deployment
 
 ## Results
 
@@ -97,6 +117,57 @@ Key features:
 | Recall     | 0.85  |
 
 *Benchmarked on the LEVIR-CD test set.*
+
+## Production Serving
+
+### REST API (FastAPI)
+
+The serving endpoint supports both PyTorch and ONNX Runtime backends with automatic fallback:
+
+```bash
+# Predict changes between two images
+curl -X POST http://localhost:8000/predict \
+  -F "image_t1=@before.png" \
+  -F "image_t2=@after.png" \
+  -o change_mask.png
+
+# Health check
+curl http://localhost:8000/health
+
+# Model info
+curl http://localhost:8000/model/info
+```
+
+### Docker Deployment
+
+```bash
+# API only
+docker build -t sat-cd-api .
+docker run -p 8000:8000 sat-cd-api
+
+# Full stack (API + Streamlit demo)
+docker compose up
+```
+
+### ONNX Export & Benchmarking
+
+Export the trained model for optimized inference and compare PyTorch vs ONNX Runtime performance:
+
+```bash
+python scripts/export_onnx.py \
+  --checkpoint models/checkpoints/best_model.pth \
+  --num-runs 100
+```
+
+Output includes a full latency comparison table with mean, P50, P95, P99 percentiles.
+
+## CI/CD
+
+Every push triggers automated checks via GitHub Actions:
+
+- **Lint & Format**: Black, Flake8, mypy
+- **Test**: pytest with coverage across Python 3.9, 3.10, 3.11
+- **Model Smoke Test**: Validates forward pass shapes and ONNX export
 
 ## Space Applications
 
@@ -116,7 +187,7 @@ If you use this project in your research, please cite:
   title={Satellite Imagery Change Detection with Siamese U-Net},
   author={Your Name},
   year={2026},
-  url={https://github.com/yourusername/satellite-change-detection}
+  url={https://github.com/neuralnomad7/satellite-change-detection}
 }
 ```
 
