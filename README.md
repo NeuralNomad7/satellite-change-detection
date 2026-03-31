@@ -7,7 +7,11 @@ A production-ready deep learning pipeline for detecting land-use and land-cover 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 <p align="center">
-  <img src="assets/pipeline-animation.svg" alt="End-to-end pipeline: satellite input → Siamese encoder → feature fusion → decoder → deployment" width="100%">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/pipeline-animation.svg">
+    <source media="(prefers-color-scheme: light)" srcset="assets/pipeline-animation.svg">
+    <img src="assets/pipeline-animation.svg" alt="End-to-end pipeline: satellite input → Siamese encoder → feature fusion → decoder → deployment" width="100%">
+  </picture>
 </p>
 
 ## System Overview
