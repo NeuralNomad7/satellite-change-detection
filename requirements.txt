@@ -25,3 +25,15 @@ albumentations>=1.3.0
 
 # Logging and utilities
 tqdm>=4.65.0
+
+# Model serving
+fastapi>=0.100.0
+uvicorn>=0.23.0
+python-multipart>=0.0.6
+
+# Model export and optimization
+onnx>=1.14.0
+onnxruntime>=1.15.0
+
+# Interactive demo
+streamlit>=1.28.0
