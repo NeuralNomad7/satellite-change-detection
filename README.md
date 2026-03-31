@@ -6,6 +6,10 @@ A production-ready deep learning pipeline for detecting land-use and land-cover 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
+<p align="center">
+  <img src="assets/pipeline-animation.svg" alt="End-to-end pipeline: satellite input → Siamese encoder → feature fusion → decoder → deployment" width="100%">
+</p>
+
 ## System Overview
 
 ```mermaid

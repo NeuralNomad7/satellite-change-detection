@@ -1,0 +1,453 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 580" font-family="'Segoe UI', system-ui, -apple-system, sans-serif">
+  <defs>
+    <!-- Satellite image pattern - "before" (green terrain) -->
+    <pattern id="terrainBefore" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
+      <rect width="20" height="20" fill="#4a7c59"/>
+      <rect x="2" y="2" width="6" height="6" rx="1" fill="#5d9e6f" opacity="0.7"/>
+      <rect x="12" y="8" width="5" height="5" rx="1" fill="#3d6b4a" opacity="0.6"/>
+      <rect x="5" y="13" width="7" height="4" rx="1" fill="#6aad7b" opacity="0.5"/>
+      <rect x="14" y="1" width="4" height="6" rx="1" fill="#528d64" opacity="0.5"/>
+    </pattern>
+    <!-- Satellite image pattern - "after" (urban change) -->
+    <pattern id="terrainAfter" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
+      <rect width="20" height="20" fill="#4a7c59"/>
+      <rect x="2" y="2" width="6" height="6" rx="1" fill="#5d9e6f" opacity="0.7"/>
+      <rect x="12" y="8" width="5" height="5" rx="1" fill="#8e8e8e" opacity="0.9"/>
+      <rect x="5" y="13" width="7" height="4" rx="1" fill="#a0a0a0" opacity="0.8"/>
+      <rect x="14" y="1" width="4" height="6" rx="1" fill="#b0b0b0" opacity="0.7"/>
+      <rect x="0" y="8" width="8" height="8" rx="1" fill="#9a9a9a" opacity="0.6"/>
+    </pattern>
+    <!-- Change mask pattern -->
+    <pattern id="changeMask" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
+      <rect width="20" height="20" fill="#1a1a2e"/>
+      <rect x="12" y="8" width="5" height="5" rx="1" fill="#ff4444" opacity="0.9"/>
+      <rect x="5" y="13" width="7" height="4" rx="1" fill="#ff4444" opacity="0.85"/>
+      <rect x="14" y="1" width="4" height="6" rx="1" fill="#ff4444" opacity="0.8"/>
+      <rect x="0" y="8" width="8" height="8" rx="1" fill="#ff4444" opacity="0.7"/>
+    </pattern>
+    <!-- Glow filter -->
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="softShadow">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.15"/>
+    </filter>
+    <!-- Animated gradient for data flow -->
+    <linearGradient id="flowGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#4285f4" stop-opacity="0">
+        <animate attributeName="offset" values="-0.3;1" dur="2s" repeatCount="indefinite"/>
+      </stop>
+      <stop offset="15%" stop-color="#4285f4" stop-opacity="1">
+        <animate attributeName="offset" values="-0.15;1.15" dur="2s" repeatCount="indefinite"/>
+      </stop>
+      <stop offset="30%" stop-color="#4285f4" stop-opacity="0">
+        <animate attributeName="offset" values="0;1.3" dur="2s" repeatCount="indefinite"/>
+      </stop>
+    </linearGradient>
+    <linearGradient id="flowGrad2" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#34a853" stop-opacity="0">
+        <animate attributeName="offset" values="-0.3;1" dur="2.5s" repeatCount="indefinite"/>
+      </stop>
+      <stop offset="15%" stop-color="#34a853" stop-opacity="1">
+        <animate attributeName="offset" values="-0.15;1.15" dur="2.5s" repeatCount="indefinite"/>
+      </stop>
+      <stop offset="30%" stop-color="#34a853" stop-opacity="0">
+        <animate attributeName="offset" values="0;1.3" dur="2.5s" repeatCount="indefinite"/>
+      </stop>
+    </linearGradient>
+    <linearGradient id="flowGrad3" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#fbbc04" stop-opacity="0">
+        <animate attributeName="offset" values="-0.3;1" dur="1.8s" repeatCount="indefinite"/>
+      </stop>
+      <stop offset="15%" stop-color="#fbbc04" stop-opacity="1">
+        <animate attributeName="offset" values="-0.15;1.15" dur="1.8s" repeatCount="indefinite"/>
+      </stop>
+      <stop offset="30%" stop-color="#fbbc04" stop-opacity="0">
+        <animate attributeName="offset" values="0;1.3" dur="1.8s" repeatCount="indefinite"/>
+      </stop>
+    </linearGradient>
+    <!-- Vertical flow -->
+    <linearGradient id="flowDown" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ea4335" stop-opacity="0">
+        <animate attributeName="offset" values="-0.3;1" dur="1.5s" repeatCount="indefinite"/>
+      </stop>
+      <stop offset="15%" stop-color="#ea4335" stop-opacity="1">
+        <animate attributeName="offset" values="-0.15;1.15" dur="1.5s" repeatCount="indefinite"/>
+      </stop>
+      <stop offset="30%" stop-color="#ea4335" stop-opacity="0">
+        <animate attributeName="offset" values="0;1.3" dur="1.5s" repeatCount="indefinite"/>
+      </stop>
+    </linearGradient>
+  </defs>
+
+  <style>
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes pulse { 0%, 100% { opacity: 0.85; } 50% { opacity: 1; } }
+    @keyframes scan { 0% { y: 0; } 100% { y: 56; } }
+    @keyframes rotateSat { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    @keyframes slideRight { 0% { opacity: 0; transform: translateX(-8px); } 100% { opacity: 1; transform: translateX(0); } }
+    @keyframes maskReveal { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0% 0 0); } }
+    @keyframes progressBar { from { width: 0; } to { width: 62px; } }
+    @keyframes neuronFire { 0%, 100% { r: 3; fill: #4285f4; opacity:0.6; } 50% { r: 5; fill: #34a853; opacity:1; } }
+    @keyframes waveform { 0% { d: path('M0,10 Q8,2 16,10 Q24,18 32,10'); } 50% { d: path('M0,10 Q8,18 16,10 Q24,2 32,10'); } 100% { d: path('M0,10 Q8,2 16,10 Q24,18 32,10'); } }
+    .fadein1 { animation: fadeInUp 0.6s ease-out 0.2s both; }
+    .fadein2 { animation: fadeInUp 0.6s ease-out 0.6s both; }
+    .fadein3 { animation: fadeInUp 0.6s ease-out 1.0s both; }
+    .fadein4 { animation: fadeInUp 0.6s ease-out 1.4s both; }
+    .fadein5 { animation: fadeInUp 0.6s ease-out 1.8s both; }
+    .scan-line { animation: scan 2s ease-in-out infinite alternate; }
+    .pulse { animation: pulse 2s ease-in-out infinite; }
+    .blink { animation: blink 1.5s ease-in-out infinite; }
+  </style>
+
+  <!-- Background -->
+  <rect width="1000" height="580" rx="16" fill="#0d1117"/>
+  <rect x="1" y="1" width="998" height="578" rx="15" fill="none" stroke="#21262d" stroke-width="1"/>
+
+  <!-- Title bar -->
+  <rect x="0" y="0" width="1000" height="48" rx="16" fill="#161b22"/>
+  <rect x="0" y="16" width="1000" height="32" fill="#161b22"/>
+  <circle cx="20" cy="24" r="6" fill="#ff5f56"/>
+  <circle cx="40" cy="24" r="6" fill="#ffbd2e"/>
+  <circle cx="60" cy="24" r="6" fill="#27c93f"/>
+  <text x="500" y="28" text-anchor="middle" fill="#e6edf3" font-size="14" font-weight="600">Satellite Change Detection — End-to-End AI Pipeline</text>
+
+  <!-- ================================================================== -->
+  <!-- STAGE 1: Satellite Input -->
+  <!-- ================================================================== -->
+  <g class="fadein1">
+    <!-- Section label -->
+    <rect x="24" y="66" width="16" height="16" rx="3" fill="#4285f4" opacity="0.2"/>
+    <text x="28" y="78" fill="#4285f4" font-size="11" font-weight="700">1</text>
+    <text x="48" y="78" fill="#8b949e" font-size="11" font-weight="600" letter-spacing="1.5">SATELLITE INPUT</text>
+
+    <!-- T1 card -->
+    <rect x="24" y="90" width="100" height="80" rx="8" fill="#1c2333" stroke="#30363d" filter="url(#softShadow)"/>
+    <rect x="30" y="96" width="88" height="56" rx="4" fill="url(#terrainBefore)"/>
+    <!-- Scan line -->
+    <rect x="30" y="96" width="88" height="2" rx="1" fill="#4285f4" opacity="0.8" class="scan-line"/>
+    <text x="74" y="164" text-anchor="middle" fill="#c9d1d9" font-size="9" font-weight="600">T1 Pre-Change</text>
+
+    <!-- T2 card -->
+    <rect x="24" y="180" width="100" height="80" rx="8" fill="#1c2333" stroke="#30363d" filter="url(#softShadow)"/>
+    <rect x="30" y="186" width="88" height="56" rx="4" fill="url(#terrainAfter)"/>
+    <rect x="30" y="186" width="88" height="2" rx="1" fill="#fbbc04" opacity="0.8" class="scan-line"/>
+    <text x="74" y="254" text-anchor="middle" fill="#c9d1d9" font-size="9" font-weight="600">T2 Post-Change</text>
+
+    <!-- Sentinel-2 badge -->
+    <rect x="30" y="270" width="88" height="20" rx="10" fill="#1f6feb" opacity="0.15" stroke="#1f6feb" stroke-opacity="0.3"/>
+    <text x="74" y="283" text-anchor="middle" fill="#58a6ff" font-size="8" font-weight="600">SENTINEL-2 · 10m</text>
+  </g>
+
+  <!-- Flow arrows: Input -> Encoder -->
+  <line x1="130" y1="130" x2="175" y2="175" stroke="url(#flowGrad)" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="130" y1="220" x2="175" y2="195" stroke="url(#flowGrad)" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- ================================================================== -->
+  <!-- STAGE 2: Siamese Encoder -->
+  <!-- ================================================================== -->
+  <g class="fadein2">
+    <rect x="162" y="66" width="16" height="16" rx="3" fill="#34a853" opacity="0.2"/>
+    <text x="166" y="78" fill="#34a853" font-size="11" font-weight="700">2</text>
+    <text x="186" y="78" fill="#8b949e" font-size="11" font-weight="600" letter-spacing="1.5">SIAMESE ENCODER</text>
+
+    <!-- Encoder block -->
+    <rect x="175" y="90" width="170" height="210" rx="10" fill="#0d1117" stroke="#238636" stroke-width="1.5" stroke-dasharray="4 2" opacity="0.9"/>
+    <text x="260" y="107" text-anchor="middle" fill="#3fb950" font-size="9" font-weight="700" letter-spacing="1">ResNet-34 (Shared Weights)</text>
+
+    <!-- Feature pyramid blocks -->
+    <g>
+      <rect x="190" y="116" width="145" height="24" rx="4" fill="#1c2333" stroke="#238636" stroke-width="0.7"/>
+      <text x="220" y="131" fill="#7ee787" font-size="9">Stage 0</text>
+      <text x="315" y="131" text-anchor="end" fill="#8b949e" font-size="8">64ch · H/2</text>
+      <circle cx="200" cy="128" r="3" fill="#3fb950" opacity="0.6">
+        <animate attributeName="r" values="3;5;3" dur="2s" begin="0s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0.6;1;0.6" dur="2s" begin="0s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+    <g>
+      <rect x="198" y="146" width="130" height="24" rx="4" fill="#1c2333" stroke="#238636" stroke-width="0.7"/>
+      <text x="225" y="161" fill="#7ee787" font-size="9">Stage 1</text>
+      <text x="312" y="161" text-anchor="end" fill="#8b949e" font-size="8">64ch · H/4</text>
+      <circle cx="208" cy="158" r="3" fill="#3fb950" opacity="0.6">
+        <animate attributeName="r" values="3;5;3" dur="2s" begin="0.3s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0.6;1;0.6" dur="2s" begin="0.3s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+    <g>
+      <rect x="206" y="176" width="116" height="24" rx="4" fill="#1c2333" stroke="#238636" stroke-width="0.7"/>
+      <text x="230" y="191" fill="#7ee787" font-size="9">Stage 2</text>
+      <text x="306" y="191" text-anchor="end" fill="#8b949e" font-size="8">128ch · H/8</text>
+      <circle cx="216" cy="188" r="3" fill="#3fb950" opacity="0.6">
+        <animate attributeName="r" values="3;5;3" dur="2s" begin="0.6s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0.6;1;0.6" dur="2s" begin="0.6s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+    <g>
+      <rect x="214" y="206" width="102" height="24" rx="4" fill="#1c2333" stroke="#238636" stroke-width="0.7"/>
+      <text x="236" y="221" fill="#7ee787" font-size="9">Stage 3</text>
+      <text x="300" y="221" text-anchor="end" fill="#8b949e" font-size="8">256ch · H/16</text>
+      <circle cx="224" cy="218" r="3" fill="#3fb950" opacity="0.6">
+        <animate attributeName="r" values="3;5;3" dur="2s" begin="0.9s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0.6;1;0.6" dur="2s" begin="0.9s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+    <g>
+      <rect x="222" y="236" width="88" height="24" rx="4" fill="#1c2333" stroke="#238636" stroke-width="0.7"/>
+      <text x="242" y="251" fill="#7ee787" font-size="9">Stage 4</text>
+      <text x="296" y="251" text-anchor="end" fill="#8b949e" font-size="8">512ch · H/32</text>
+      <circle cx="232" cy="248" r="3" fill="#3fb950" opacity="0.6">
+        <animate attributeName="r" values="3;5;3" dur="2s" begin="1.2s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0.6;1;0.6" dur="2s" begin="1.2s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+
+    <!-- ImageNet pretrained badge -->
+    <rect x="200" y="270" width="88" height="20" rx="10" fill="#238636" opacity="0.15" stroke="#238636" stroke-opacity="0.3"/>
+    <text x="244" y="283" text-anchor="middle" fill="#3fb950" font-size="8" font-weight="600">ImageNet Pretrained</text>
+  </g>
+
+  <!-- Flow arrows: Encoder -> Fusion -->
+  <line x1="350" y1="185" x2="385" y2="185" stroke="url(#flowGrad2)" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- ================================================================== -->
+  <!-- STAGE 3: Feature Fusion -->
+  <!-- ================================================================== -->
+  <g class="fadein3">
+    <rect x="372" y="66" width="16" height="16" rx="3" fill="#fbbc04" opacity="0.2"/>
+    <text x="376" y="78" fill="#fbbc04" font-size="11" font-weight="700">3</text>
+    <text x="396" y="78" fill="#8b949e" font-size="11" font-weight="600" letter-spacing="1.5">FEATURE FUSION</text>
+
+    <rect x="385" y="100" width="130" height="200" rx="10" fill="#0d1117" stroke="#d29922" stroke-width="1.5" stroke-dasharray="4 2" opacity="0.9"/>
+
+    <!-- Fusion operations -->
+    <text x="450" y="118" text-anchor="middle" fill="#e3b341" font-size="9" font-weight="700" letter-spacing="1">Diff + Concat</text>
+
+    <!-- Animated fusion nodes -->
+    <g>
+      <rect x="400" y="128" width="100" height="30" rx="6" fill="#1c2333" stroke="#d29922" stroke-width="0.7"/>
+      <text x="420" y="146" fill="#e3b341" font-size="9">|F1 − F2|</text>
+      <text x="490" y="146" text-anchor="end" fill="#8b949e" font-size="7">magnitude</text>
+      <!-- Animated merge indicator -->
+      <circle cx="410" cy="143" r="3" fill="#fbbc04">
+        <animate attributeName="opacity" values="0.4;1;0.4" dur="1.5s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+
+    <text x="450" y="172" text-anchor="middle" fill="#484f58" font-size="10">+</text>
+
+    <g>
+      <rect x="400" y="178" width="100" height="30" rx="6" fill="#1c2333" stroke="#d29922" stroke-width="0.7"/>
+      <text x="420" y="196" fill="#e3b341" font-size="9">[F1, F2]</text>
+      <text x="490" y="196" text-anchor="end" fill="#8b949e" font-size="7">context</text>
+      <circle cx="410" cy="193" r="3" fill="#fbbc04">
+        <animate attributeName="opacity" values="0.4;1;0.4" dur="1.5s" begin="0.5s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+
+    <!-- 1x1 conv -->
+    <text x="450" y="225" text-anchor="middle" fill="#484f58" font-size="16">↓</text>
+    <rect x="410" y="232" width="80" height="24" rx="6" fill="#1c2333" stroke="#d29922" stroke-width="0.7"/>
+    <text x="450" y="247" text-anchor="middle" fill="#e3b341" font-size="8" font-weight="600">1×1 Conv + BN</text>
+
+    <!-- Multi-scale badge -->
+    <rect x="406" y="270" width="88" height="20" rx="10" fill="#d29922" opacity="0.15" stroke="#d29922" stroke-opacity="0.3"/>
+    <text x="450" y="283" text-anchor="middle" fill="#e3b341" font-size="8" font-weight="600">5 Scales Fused</text>
+  </g>
+
+  <!-- Flow arrows: Fusion -> Decoder -->
+  <line x1="520" y1="185" x2="555" y2="185" stroke="url(#flowGrad3)" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- ================================================================== -->
+  <!-- STAGE 4: Decoder + Output -->
+  <!-- ================================================================== -->
+  <g class="fadein4">
+    <rect x="543" y="66" width="16" height="16" rx="3" fill="#ea4335" opacity="0.2"/>
+    <text x="547" y="78" fill="#ea4335" font-size="11" font-weight="700">4</text>
+    <text x="567" y="78" fill="#8b949e" font-size="11" font-weight="600" letter-spacing="1.5">DECODER + OUTPUT</text>
+
+    <rect x="555" y="90" width="170" height="150" rx="10" fill="#0d1117" stroke="#f85149" stroke-width="1.5" stroke-dasharray="4 2" opacity="0.9"/>
+    <text x="640" y="107" text-anchor="middle" fill="#f85149" font-size="9" font-weight="700" letter-spacing="1">U-Net Decoder</text>
+
+    <!-- Decoder layers expanding -->
+    <rect x="600" y="116" width="60" height="16" rx="3" fill="#1c2333" stroke="#f85149" stroke-width="0.7"/>
+    <text x="630" y="127" text-anchor="middle" fill="#ffa198" font-size="7">D4 · 256ch</text>
+
+    <rect x="592" y="136" width="76" height="16" rx="3" fill="#1c2333" stroke="#f85149" stroke-width="0.7"/>
+    <text x="630" y="147" text-anchor="middle" fill="#ffa198" font-size="7">D3 · 128ch</text>
+
+    <rect x="584" y="156" width="92" height="16" rx="3" fill="#1c2333" stroke="#f85149" stroke-width="0.7"/>
+    <text x="630" y="167" text-anchor="middle" fill="#ffa198" font-size="7">D2 · 64ch</text>
+
+    <rect x="576" y="176" width="108" height="16" rx="3" fill="#1c2333" stroke="#f85149" stroke-width="0.7"/>
+    <text x="630" y="187" text-anchor="middle" fill="#ffa198" font-size="7">D1 · 64ch</text>
+
+    <!-- Skip connection arrows -->
+    <text x="570" y="128" fill="#484f58" font-size="8">←skip</text>
+    <text x="570" y="148" fill="#484f58" font-size="8">←skip</text>
+    <text x="570" y="168" fill="#484f58" font-size="8">←skip</text>
+    <text x="570" y="188" fill="#484f58" font-size="8">←skip</text>
+
+    <!-- Deep supervision indicators -->
+    <circle cx="694" cy="124" r="4" fill="#f85149" opacity="0.5" class="pulse"/>
+    <circle cx="700" cy="144" r="4" fill="#f85149" opacity="0.5" class="pulse"/>
+    <circle cx="706" cy="164" r="4" fill="#f85149" opacity="0.5" class="pulse"/>
+    <circle cx="712" cy="184" r="4" fill="#f85149" opacity="0.5" class="pulse"/>
+    <text x="720" y="155" fill="#484f58" font-size="7" transform="rotate(90,720,155)">deep supervision</text>
+
+    <!-- Sigmoid + threshold -->
+    <rect x="585" y="200" width="90" height="20" rx="6" fill="#f85149" opacity="0.15" stroke="#f85149" stroke-opacity="0.4"/>
+    <text x="630" y="213" text-anchor="middle" fill="#ffa198" font-size="8" font-weight="600">Sigmoid → 0.5</text>
+
+    <!-- Output change mask -->
+    <rect x="575" y="250" width="100" height="80" rx="8" fill="#1c2333" stroke="#f85149" filter="url(#softShadow)"/>
+    <rect x="581" y="256" width="88" height="56" rx="4" fill="url(#changeMask)"/>
+    <!-- Animated mask reveal -->
+    <rect x="581" y="256" width="88" height="56" rx="4" fill="#1a1a2e" opacity="0.9">
+      <animate attributeName="width" values="88;0" dur="3s" begin="2s" fill="freeze"/>
+    </rect>
+    <text x="625" y="326" text-anchor="middle" fill="#c9d1d9" font-size="9" font-weight="600">Change Mask</text>
+
+    <!-- Downward flow to mask -->
+    <line x1="630" y1="222" x2="625" y2="248" stroke="url(#flowDown)" stroke-width="2" stroke-linecap="round"/>
+  </g>
+
+  <!-- ================================================================== -->
+  <!-- STAGE 5: Deployment Stack -->
+  <!-- ================================================================== -->
+  <g class="fadein5">
+    <rect x="753" y="66" width="16" height="16" rx="3" fill="#a371f7" opacity="0.2"/>
+    <text x="757" y="78" fill="#a371f7" font-size="11" font-weight="700">5</text>
+    <text x="777" y="78" fill="#8b949e" font-size="11" font-weight="600" letter-spacing="1.5">DEPLOYMENT</text>
+
+    <!-- FastAPI -->
+    <rect x="755" y="90" width="115" height="50" rx="8" fill="#1c2333" stroke="#a371f7" filter="url(#softShadow)"/>
+    <text x="812" y="110" text-anchor="middle" fill="#d2a8ff" font-size="10" font-weight="700">FastAPI</text>
+    <text x="812" y="124" text-anchor="middle" fill="#8b949e" font-size="8">REST · /predict</text>
+    <!-- Activity indicator -->
+    <circle cx="765" cy="100" r="3" fill="#3fb950" class="blink"/>
+
+    <!-- ONNX Runtime -->
+    <rect x="878" y="90" width="100" height="50" rx="8" fill="#1c2333" stroke="#a371f7" filter="url(#softShadow)"/>
+    <text x="928" y="110" text-anchor="middle" fill="#d2a8ff" font-size="10" font-weight="700">ONNX-RT</text>
+    <text x="928" y="124" text-anchor="middle" fill="#8b949e" font-size="8">2-5× faster</text>
+
+    <!-- Docker -->
+    <rect x="755" y="152" width="223" height="50" rx="8" fill="#1c2333" stroke="#a371f7" filter="url(#softShadow)"/>
+    <text x="866" y="172" text-anchor="middle" fill="#d2a8ff" font-size="10" font-weight="700">Docker Compose</text>
+    <text x="866" y="186" text-anchor="middle" fill="#8b949e" font-size="8">API :8000 + Streamlit Demo :8501</text>
+
+    <!-- Streamlit -->
+    <rect x="755" y="214" width="223" height="50" rx="8" fill="#1c2333" stroke="#a371f7" filter="url(#softShadow)"/>
+    <text x="866" y="234" text-anchor="middle" fill="#d2a8ff" font-size="10" font-weight="700">Streamlit Demo</text>
+    <text x="866" y="248" text-anchor="middle" fill="#8b949e" font-size="8">Upload → Inference → Overlay + Heatmap</text>
+
+    <!-- CI/CD -->
+    <rect x="755" y="276" width="223" height="50" rx="8" fill="#1c2333" stroke="#a371f7" filter="url(#softShadow)"/>
+    <text x="866" y="296" text-anchor="middle" fill="#d2a8ff" font-size="10" font-weight="700">GitHub Actions CI/CD</text>
+    <text x="866" y="310" text-anchor="middle" fill="#8b949e" font-size="8">Lint · Test (3.9-3.11) · Model Smoke</text>
+    <!-- Animated check marks -->
+    <g transform="translate(770, 300)">
+      <circle r="5" fill="#238636" opacity="0.2"/>
+      <text x="0" y="4" text-anchor="middle" fill="#3fb950" font-size="8">✓</text>
+      <animate attributeName="opacity" values="0;1" dur="0.3s" begin="3s" fill="freeze"/>
+    </g>
+    <g transform="translate(790, 300)">
+      <circle r="5" fill="#238636" opacity="0.2"/>
+      <text x="0" y="4" text-anchor="middle" fill="#3fb950" font-size="8">✓</text>
+      <animate attributeName="opacity" values="0;1" dur="0.3s" begin="3.3s" fill="freeze"/>
+    </g>
+    <g transform="translate(810, 300)">
+      <circle r="5" fill="#238636" opacity="0.2"/>
+      <text x="0" y="4" text-anchor="middle" fill="#3fb950" font-size="8">✓</text>
+      <animate attributeName="opacity" values="0;1" dur="0.3s" begin="3.6s" fill="freeze"/>
+    </g>
+
+    <!-- Flow from decoder output to deployment -->
+    <line x1="680" y1="290" x2="750" y2="200" stroke="url(#flowGrad)" stroke-width="2" stroke-linecap="round"/>
+  </g>
+
+  <!-- ================================================================== -->
+  <!-- Bottom stats bar -->
+  <!-- ================================================================== -->
+  <g class="fadein5">
+    <rect x="0" y="345" width="1000" height="1" fill="#21262d"/>
+
+    <!-- Metrics bar -->
+    <g transform="translate(30, 370)">
+      <text x="0" y="0" fill="#8b949e" font-size="10" font-weight="600" letter-spacing="1.5">LEVIR-CD BENCHMARK</text>
+
+      <!-- F1 -->
+      <rect x="0" y="14" width="110" height="48" rx="8" fill="#1c2333" stroke="#30363d"/>
+      <text x="55" y="34" text-anchor="middle" fill="#58a6ff" font-size="20" font-weight="700">0.87</text>
+      <text x="55" y="52" text-anchor="middle" fill="#8b949e" font-size="9">F1 Score</text>
+
+      <!-- IoU -->
+      <rect x="120" y="14" width="110" height="48" rx="8" fill="#1c2333" stroke="#30363d"/>
+      <text x="175" y="34" text-anchor="middle" fill="#3fb950" font-size="20" font-weight="700">0.77</text>
+      <text x="175" y="52" text-anchor="middle" fill="#8b949e" font-size="9">IoU</text>
+
+      <!-- Precision -->
+      <rect x="240" y="14" width="110" height="48" rx="8" fill="#1c2333" stroke="#30363d"/>
+      <text x="295" y="34" text-anchor="middle" fill="#e3b341" font-size="20" font-weight="700">0.89</text>
+      <text x="295" y="52" text-anchor="middle" fill="#8b949e" font-size="9">Precision</text>
+
+      <!-- Recall -->
+      <rect x="360" y="14" width="110" height="48" rx="8" fill="#1c2333" stroke="#30363d"/>
+      <text x="415" y="34" text-anchor="middle" fill="#f85149" font-size="20" font-weight="700">0.85</text>
+      <text x="415" y="52" text-anchor="middle" fill="#8b949e" font-size="9">Recall</text>
+    </g>
+
+    <!-- Tech stack -->
+    <g transform="translate(540, 370)">
+      <text x="0" y="0" fill="#8b949e" font-size="10" font-weight="600" letter-spacing="1.5">TECH STACK</text>
+      <g transform="translate(0, 14)">
+        <rect x="0" y="0" width="65" height="22" rx="11" fill="#1f6feb" opacity="0.15" stroke="#1f6feb" stroke-opacity="0.3"/>
+        <text x="32" y="15" text-anchor="middle" fill="#58a6ff" font-size="8" font-weight="600">PyTorch</text>
+
+        <rect x="72" y="0" width="65" height="22" rx="11" fill="#238636" opacity="0.15" stroke="#238636" stroke-opacity="0.3"/>
+        <text x="104" y="15" text-anchor="middle" fill="#3fb950" font-size="8" font-weight="600">FastAPI</text>
+
+        <rect x="144" y="0" width="55" height="22" rx="11" fill="#f85149" opacity="0.15" stroke="#f85149" stroke-opacity="0.3"/>
+        <text x="171" y="15" text-anchor="middle" fill="#ffa198" font-size="8" font-weight="600">ONNX</text>
+
+        <rect x="206" y="0" width="65" height="22" rx="11" fill="#d29922" opacity="0.15" stroke="#d29922" stroke-opacity="0.3"/>
+        <text x="238" y="15" text-anchor="middle" fill="#e3b341" font-size="8" font-weight="600">Docker</text>
+
+        <rect x="278" y="0" width="75" height="22" rx="11" fill="#a371f7" opacity="0.15" stroke="#a371f7" stroke-opacity="0.3"/>
+        <text x="315" y="15" text-anchor="middle" fill="#d2a8ff" font-size="8" font-weight="600">Streamlit</text>
+
+        <rect x="360" y="0" width="80" height="22" rx="11" fill="#f78166" opacity="0.15" stroke="#f78166" stroke-opacity="0.3"/>
+        <text x="400" y="15" text-anchor="middle" fill="#ffa657" font-size="8" font-weight="600">GH Actions</text>
+      </g>
+      <g transform="translate(0, 40)">
+        <rect x="0" y="0" width="65" height="22" rx="11" fill="#1f6feb" opacity="0.15" stroke="#1f6feb" stroke-opacity="0.3"/>
+        <text x="32" y="15" text-anchor="middle" fill="#58a6ff" font-size="8" font-weight="600">ResNet-34</text>
+
+        <rect x="72" y="0" width="90" height="22" rx="11" fill="#238636" opacity="0.15" stroke="#238636" stroke-opacity="0.3"/>
+        <text x="117" y="15" text-anchor="middle" fill="#3fb950" font-size="8" font-weight="600">Albumentations</text>
+
+        <rect x="169" y="0" width="85" height="22" rx="11" fill="#d29922" opacity="0.15" stroke="#d29922" stroke-opacity="0.3"/>
+        <text x="211" y="15" text-anchor="middle" fill="#e3b341" font-size="8" font-weight="600">TensorBoard</text>
+
+        <rect x="261" y="0" width="60" height="22" rx="11" fill="#f85149" opacity="0.15" stroke="#f85149" stroke-opacity="0.3"/>
+        <text x="291" y="15" text-anchor="middle" fill="#ffa198" font-size="8" font-weight="600">Rasterio</text>
+
+        <rect x="328" y="0" width="60" height="22" rx="11" fill="#a371f7" opacity="0.15" stroke="#a371f7" stroke-opacity="0.3"/>
+        <text x="358" y="15" text-anchor="middle" fill="#d2a8ff" font-size="8" font-weight="600">pytest</text>
+
+        <rect x="395" y="0" width="48" height="22" rx="11" fill="#f78166" opacity="0.15" stroke="#f78166" stroke-opacity="0.3"/>
+        <text x="419" y="15" text-anchor="middle" fill="#ffa657" font-size="8" font-weight="600">mypy</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- ================================================================== -->
+  <!-- Bottom tagline -->
+  <!-- ================================================================== -->
+  <text x="500" y="562" text-anchor="middle" fill="#484f58" font-size="11">
+    From satellite pixels to production API — built end-to-end with PyTorch
+  </text>
+</svg>
