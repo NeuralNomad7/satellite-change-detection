@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "satellite-change-detection"
-version = "1.2.0"
+version = "1.3.0"
 description = "Deep learning pipeline for satellite imagery change detection using Sentinel-2 data"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -45,12 +45,19 @@ dev = [
     "mypy>=1.10",
     "pre-commit>=3.7",
 ]
+# Sentinel-2 STAC ingestion (sat-cd-ingest). Optional: only needed to fetch
+# real imagery from the Microsoft Planetary Computer.
+ingest = [
+    "pystac-client>=0.7",
+    "planetary-computer>=1.0",
+]
 
 [project.scripts]
 sat-cd-train = "src.train:main"
 sat-cd-eval = "src.eval:main"
 sat-cd-export = "scripts.export_onnx:main"
 sat-cd-geo = "scripts.predict_geo:main"
+sat-cd-ingest = "scripts.ingest_s2:main"
 
 [tool.setuptools.packages.find]
 include = ["src*", "scripts*"]
