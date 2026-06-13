@@ -7,9 +7,10 @@ Usage:
     uvicorn serving.app:app --host 0.0.0.0 --port 8000
 
 Endpoints:
-    POST /predict        - Upload two images, get a binary change mask
-    GET  /health         - Health check
-    GET  /model/info     - Model metadata and configuration
+    POST /predict          - Upload two images, get a binary change mask
+    POST /predict/geotiff  - Upload two GeoTIFFs, get GeoJSON change polygons
+    GET  /health           - Health check
+    GET  /model/info       - Model metadata and configuration
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ import io
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Optional
+from typing import Annotated
 
 import numpy as np
 import torch
@@ -27,8 +28,13 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from PIL import Image
 
 from src.config import Config
+from src.geo import (
+    change_statistics,
+    mask_to_polygons,
+    normalize_imagenet,
+    read_geotiff_bytes,
+)
 from src.models import build_model, count_parameters
-
 
 # ---------------------------------------------------------------------------
 # Global model state
@@ -120,7 +126,7 @@ app = FastAPI(
         "satellite imagery. Upload a pre-change and post-change image to "
         "receive a binary change mask."
     ),
-    version="1.0.0",
+    version="1.2.0",
     lifespan=lifespan,
 )
 
@@ -268,4 +274,77 @@ async def predict(
             "X-Changed-Pixels": str(int(mask.sum())),
             "X-Change-Fraction": str(round(float(mask.mean()), 4)),
         },
+    )
+
+
+@app.post("/predict/geotiff")
+async def predict_geotiff(
+    image_t1: Annotated[UploadFile, File(description="Pre-change GeoTIFF")],
+    image_t2: Annotated[UploadFile, File(description="Post-change GeoTIFF")],
+    min_area_m2: float = 0.0,
+):
+    """Run change detection on a co-registered GeoTIFF pair.
+
+    Unlike ``/predict`` (which returns a plain PNG mask), this endpoint preserves
+    geospatial metadata and returns georeferenced results: a GeoJSON
+    FeatureCollection of change polygons in WGS84 lon/lat -- each annotated with
+    its ground area in hectares and centroid -- plus a change-statistics summary
+    (changed area, fraction, and region count).
+
+    Args:
+        image_t1: Pre-change GeoTIFF (with CRS + transform).
+        image_t2: Post-change GeoTIFF, co-registered to T1.
+        min_area_m2: Drop change regions smaller than this many square metres.
+
+    Returns:
+        JSON with ``statistics`` and a ``geojson`` FeatureCollection.
+    """
+    try:
+        bytes_t1 = await image_t1.read()
+        bytes_t2 = await image_t2.read()
+    except Exception as e:
+        raise HTTPException(
+            status_code=400, detail=f"Error reading uploaded files: {e}"
+        ) from e
+
+    try:
+        raster1 = read_geotiff_bytes(bytes_t1)
+        raster2 = read_geotiff_bytes(bytes_t2)
+    except Exception as e:
+        raise HTTPException(
+            status_code=400, detail=f"Error reading GeoTIFFs: {e}"
+        ) from e
+
+    if raster1.data.shape[:2] != raster2.data.shape[:2]:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Image dimensions must match. "
+                f"Got T1: {raster1.data.shape[:2]} vs T2: {raster2.data.shape[:2]}"
+            ),
+        )
+
+    config = MODEL_STATE["config"]
+    in_channels = config.model.in_channels
+    try:
+        img1 = normalize_imagenet(raster1.data, in_channels)
+        img2 = normalize_imagenet(raster2.data, in_channels)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    start = time.time()
+    mask = _run_inference(img1, img2)
+    inference_time = time.time() - start
+
+    polygons = mask_to_polygons(
+        mask, raster1.transform, raster1.crs, min_area_m2=min_area_m2
+    )
+    stats = change_statistics(mask, raster1.transform, raster1.crs, polygons=polygons)
+
+    return JSONResponse(
+        {
+            "statistics": stats,
+            "geojson": polygons,
+            "inference_time_ms": round(inference_time * 1000, 2),
+        }
     )

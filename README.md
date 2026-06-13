@@ -37,6 +37,7 @@ graph LR
 
     subgraph OUTPUT ["Output"]
         API --> MASK["Change\nMask"]
+        API --> GEO["GeoTIFF +\nGeoJSON"]
         API --> DEMO["Streamlit\nDemo"]
     end
 
@@ -169,11 +170,13 @@ satellite-change-detection/
 │   ├── models.py                  # Siamese U-Net architecture
 │   ├── train.py                   # Training loop (AMP, deep supervision)
 │   ├── eval.py                    # Evaluation and inference
+│   ├── geo.py                     # Geospatial I/O + GeoJSON vectorization
 │   └── utils.py                   # Metrics and visualization
 ├── serving/                       # Production API
 │   └── app.py                     # FastAPI inference endpoint
 ├── scripts/
-│   └── export_onnx.py             # ONNX export + benchmark
+│   ├── export_onnx.py             # ONNX export + benchmark
+│   └── predict_geo.py             # Georeferenced GeoTIFF inference
 ├── notebooks/                     # Interactive workflows
 │   ├── 01_eda.ipynb               # Exploratory data analysis
 │   ├── 02_training.ipynb          # Training walkthrough
@@ -313,6 +316,50 @@ python scripts/export_onnx.py \
 ```
 
 Output includes a full latency comparison table with mean, P50, P95, P99 percentiles.
+
+## Geospatial Output
+
+Most of the pipeline operates on plain image tensors, but real Earth-observation
+work needs results that line up with a map. The `src.geo` module keeps the
+coordinate reference system (CRS) and affine transform intact end to end, so a
+co-registered GeoTIFF pair yields georeferenced products instead of bare PNGs:
+
+- **`change_mask.tif`** — the binary change mask as a GeoTIFF that overlays the
+  source scene directly in QGIS/ArcGIS
+- **`change_polygons.geojson`** — change regions vectorized to WGS84 polygons,
+  each tagged with its **area in hectares** and centroid lon/lat
+- **`change_stats.json`** — changed area, change fraction, and region count
+
+### Georeferenced CLI
+
+```bash
+sat-cd-geo \
+  --checkpoint models/checkpoints/best_model.pth \
+  --image-t1 before.tif \
+  --image-t2 after.tif \
+  --output-dir results/geo \
+  --min-area-m2 500          # ignore change blobs smaller than 500 m²
+```
+
+Large scenes are tiled automatically using the existing sliding-window inference.
+
+### Georeferenced API
+
+The serving layer exposes a geospatial endpoint alongside the PNG one:
+
+```bash
+curl -X POST http://localhost:8000/predict/geotiff \
+  -F "image_t1=@before.tif" \
+  -F "image_t2=@after.tif"
+```
+
+It returns JSON containing a GeoJSON `FeatureCollection` of change polygons
+(WGS84, with per-region area in hectares) plus a `statistics` summary — ready to
+drop straight onto a Leaflet map or into geojson.io.
+
+> **Note:** inputs must be co-registered (same grid) and in the pixel range the
+> model was trained on. Fetching, cloud-masking, and aligning raw Sentinel-2
+> scenes from a bounding box + two dates is the next milestone (ingestion module).
 
 ## Space Applications
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "satellite-change-detection"
-version = "1.1.0"
+version = "1.2.0"
 description = "Deep learning pipeline for satellite imagery change detection using Sentinel-2 data"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -50,6 +50,7 @@ dev = [
 sat-cd-train = "src.train:main"
 sat-cd-eval = "src.eval:main"
 sat-cd-export = "scripts.export_onnx:main"
+sat-cd-geo = "scripts.predict_geo:main"
 
 [tool.setuptools.packages.find]
 include = ["src*", "scripts*"]
