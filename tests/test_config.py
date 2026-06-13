@@ -1,12 +1,10 @@
 """Tests for configuration loading and management."""
 
 from pathlib import Path
-import tempfile
 
-import pytest
 import yaml
 
-from src.config import Config, ModelConfig
+from src.config import Config
 
 
 class TestConfig:

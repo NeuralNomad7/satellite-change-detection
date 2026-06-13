@@ -9,7 +9,6 @@ from __future__ import annotations
 import os
 import random
 from pathlib import Path
-from typing import Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -38,7 +37,7 @@ def set_seed(seed: int) -> None:
         torch.backends.cudnn.benchmark = False
 
 
-def get_device(override: Optional[str] = None) -> torch.device:
+def get_device(override: str | None = None) -> torch.device:
     """Select the best available compute device.
 
     Priority: user override > CUDA GPU > MPS (Apple Silicon) > CPU.
@@ -61,6 +60,7 @@ def get_device(override: Optional[str] = None) -> torch.device:
 # ---------------------------------------------------------------------------
 # Metrics
 # ---------------------------------------------------------------------------
+
 
 def compute_iou(pred: np.ndarray, target: np.ndarray) -> float:
     """Compute Intersection over Union for binary masks.
@@ -181,9 +181,9 @@ def visualize_change_detection(
     image_t1: np.ndarray,
     image_t2: np.ndarray,
     prediction: np.ndarray,
-    ground_truth: Optional[np.ndarray] = None,
-    save_path: Optional[str | Path] = None,
-    title: Optional[str] = None,
+    ground_truth: np.ndarray | None = None,
+    save_path: str | Path | None = None,
+    title: str | None = None,
 ) -> plt.Figure:
     """Create a publication-quality visualization of change detection results.
 
@@ -265,7 +265,7 @@ def plot_training_curves(
     train_losses: list[float],
     val_losses: list[float],
     val_f1_scores: list[float],
-    save_path: Optional[str | Path] = None,
+    save_path: str | Path | None = None,
 ) -> plt.Figure:
     """Plot training and validation loss curves with F1 score.
 
@@ -310,7 +310,7 @@ def plot_training_curves(
 
 def plot_confusion_matrix(
     cm: np.ndarray,
-    save_path: Optional[str | Path] = None,
+    save_path: str | Path | None = None,
 ) -> plt.Figure:
     """Plot a labeled confusion matrix heatmap.
 
@@ -336,7 +336,15 @@ def plot_confusion_matrix(
     for i in range(2):
         for j in range(2):
             color = "white" if cm[i, j] > cm.max() / 2 else "black"
-            ax.text(j, i, f"{cm[i, j]:,}", ha="center", va="center", color=color, fontsize=14)
+            ax.text(
+                j,
+                i,
+                f"{cm[i, j]:,}",
+                ha="center",
+                va="center",
+                color=color,
+                fontsize=14,
+            )
 
     fig.colorbar(im)
     plt.tight_layout()

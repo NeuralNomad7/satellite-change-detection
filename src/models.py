@@ -17,8 +17,6 @@ Key architectural choices:
 
 from __future__ import annotations
 
-from typing import Optional
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -142,8 +140,12 @@ class ResNetEncoder(nn.Module):
         if in_channels != 3:
             original_conv = resnet.conv1
             new_conv = nn.Conv2d(
-                in_channels, 64,
-                kernel_size=7, stride=2, padding=3, bias=False,
+                in_channels,
+                64,
+                kernel_size=7,
+                stride=2,
+                padding=3,
+                bias=False,
             )
             if pretrained:
                 # Replicate pretrained RGB weights across extra channels
@@ -183,7 +185,7 @@ class ResNetEncoder(nn.Module):
         Returns:
             List of 5 feature maps at decreasing spatial resolutions.
         """
-        f0 = self.stage0(x)   # (B, 64,  H/2,  W/2)
+        f0 = self.stage0(x)  # (B, 64,  H/2,  W/2)
         f1 = self.stage1(f0)  # (B, 64,  H/4,  W/4)
         f2 = self.stage2(f1)  # (B, 128, H/8,  W/8)
         f3 = self.stage3(f2)  # (B, 256, H/16, W/16)
@@ -204,12 +206,13 @@ class DecoderBlock(nn.Module):
         out_channels: Output channels for this decoder level.
     """
 
-    def __init__(
-        self, in_channels: int, skip_channels: int, out_channels: int
-    ) -> None:
+    def __init__(self, in_channels: int, skip_channels: int, out_channels: int) -> None:
         super().__init__()
         self.upsample = nn.ConvTranspose2d(
-            in_channels, in_channels, kernel_size=2, stride=2,
+            in_channels,
+            in_channels,
+            kernel_size=2,
+            stride=2,
         )
         self.conv = ConvBlock(in_channels + skip_channels, out_channels)
 
@@ -271,9 +274,7 @@ class SiameseUNet(nn.Module):
         channels = self.encoder.channels  # [64, 64, 128, 256, 512]
 
         # Feature fusion modules at each encoder scale
-        self.fusions = nn.ModuleList([
-            FeatureFusion(c, fusion_mode) for c in channels
-        ])
+        self.fusions = nn.ModuleList([FeatureFusion(c, fusion_mode) for c in channels])
 
         # Decoder path
         self.decoder4 = DecoderBlock(channels[4], channels[3], channels[3])
@@ -284,7 +285,10 @@ class SiameseUNet(nn.Module):
         # Final upsampling to match input resolution
         # (encoder's first stage has stride 2)
         self.final_upsample = nn.ConvTranspose2d(
-            channels[0], channels[0], kernel_size=2, stride=2,
+            channels[0],
+            channels[0],
+            kernel_size=2,
+            stride=2,
         )
 
         # Classification head
@@ -292,15 +296,19 @@ class SiameseUNet(nn.Module):
 
         # Deep supervision heads (auxiliary classifiers at each scale)
         if deep_supervision:
-            self.aux_classifiers = nn.ModuleList([
-                nn.Conv2d(channels[0], num_classes, kernel_size=1),  # scale 1
-                nn.Conv2d(channels[1], num_classes, kernel_size=1),  # scale 2
-                nn.Conv2d(channels[2], num_classes, kernel_size=1),  # scale 3
-                nn.Conv2d(channels[3], num_classes, kernel_size=1),  # scale 4
-            ])
+            self.aux_classifiers = nn.ModuleList(
+                [
+                    nn.Conv2d(channels[0], num_classes, kernel_size=1),  # scale 1
+                    nn.Conv2d(channels[1], num_classes, kernel_size=1),  # scale 2
+                    nn.Conv2d(channels[2], num_classes, kernel_size=1),  # scale 3
+                    nn.Conv2d(channels[3], num_classes, kernel_size=1),  # scale 4
+                ]
+            )
 
     def forward(
-        self, x1: torch.Tensor, x2: torch.Tensor,
+        self,
+        x1: torch.Tensor,
+        x2: torch.Tensor,
     ) -> dict[str, torch.Tensor]:
         """Forward pass for bi-temporal change detection.
 
@@ -321,7 +329,7 @@ class SiameseUNet(nn.Module):
         # Fuse features at each scale
         fused = [
             fusion(f1, f2)
-            for fusion, f1, f2 in zip(self.fusions, features1, features2)
+            for fusion, f1, f2 in zip(self.fusions, features1, features2, strict=False)
         ]
 
         # Decode with skip connections from fused features
@@ -335,7 +343,9 @@ class SiameseUNet(nn.Module):
 
         # Handle spatial mismatch with input
         if d0.shape[2:] != x1.shape[2:]:
-            d0 = F.interpolate(d0, size=x1.shape[2:], mode="bilinear", align_corners=False)
+            d0 = F.interpolate(
+                d0, size=x1.shape[2:], mode="bilinear", align_corners=False
+            )
 
         # Main prediction
         pred = self.classifier(d0)
@@ -349,7 +359,9 @@ class SiameseUNet(nn.Module):
                 F.interpolate(
                     clf(feat), size=target_size, mode="bilinear", align_corners=False
                 )
-                for clf, feat in zip(self.aux_classifiers, [d1, d2, d3, d4])
+                for clf, feat in zip(
+                    self.aux_classifiers, [d1, d2, d3, d4], strict=False
+                )
             ]
             output["aux_preds"] = aux_preds
 
@@ -359,6 +371,7 @@ class SiameseUNet(nn.Module):
 # ---------------------------------------------------------------------------
 # Loss functions
 # ---------------------------------------------------------------------------
+
 
 class DiceLoss(nn.Module):
     """Soft Dice Loss for binary segmentation.
@@ -430,9 +443,8 @@ class BCEDiceLoss(nn.Module):
         Returns:
             Scalar combined loss.
         """
-        return (
-            self.bce_weight * self.bce(pred, target)
-            + self.dice_weight * self.dice(pred, target)
+        return self.bce_weight * self.bce(pred, target) + self.dice_weight * self.dice(
+            pred, target
         )
 
 
