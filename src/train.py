@@ -17,12 +17,11 @@ from __future__ import annotations
 import os
 import time
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.cuda.amp import GradScaler, autocast
+from torch.amp import GradScaler, autocast
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from torch.utils.data import DataLoader
@@ -58,7 +57,7 @@ class EarlyStopping:
         self.mode = mode
         self.min_delta = min_delta
         self.counter = 0
-        self.best_value: Optional[float] = None
+        self.best_value: float | None = None
         self.should_stop = False
 
     def step(self, value: float) -> bool:
@@ -99,7 +98,7 @@ def train_one_epoch(
     device: torch.device,
     epoch: int,
     config: Config,
-    writer: Optional[SummaryWriter] = None,
+    writer: SummaryWriter | None = None,
 ) -> float:
     """Run one training epoch.
 
@@ -121,6 +120,7 @@ def train_one_epoch(
         Average training loss for this epoch.
     """
     model.train()
+    use_amp = config.training.mixed_precision and torch.cuda.is_available()
     running_loss = 0.0
     num_batches = 0
 
@@ -134,7 +134,7 @@ def train_one_epoch(
         optimizer.zero_grad()
 
         # Mixed precision forward pass
-        with autocast(enabled=config.training.mixed_precision):
+        with autocast("cuda", enabled=use_amp):
             output = model(image1, image2)
             loss = criterion(output["pred"], mask)
 
@@ -143,7 +143,9 @@ def train_one_epoch(
             # the encoder learn meaningful features at every resolution
             if "aux_preds" in output:
                 aux_weights = [0.4, 0.2, 0.1, 0.05]
-                for aux_pred, weight in zip(output["aux_preds"], aux_weights):
+                for aux_pred, weight in zip(
+                    output["aux_preds"], aux_weights, strict=False
+                ):
                     loss = loss + weight * criterion(aux_pred, mask)
 
         # Backward pass with gradient scaling (prevents FP16 underflow)
@@ -192,6 +194,7 @@ def validate(
         Tuple of (average_loss, metrics_dict).
     """
     model.eval()
+    use_amp = config.training.mixed_precision and torch.cuda.is_available()
     running_loss = 0.0
     all_preds = []
     all_targets = []
@@ -204,7 +207,7 @@ def validate(
         image2 = batch["image2"].to(device, non_blocking=True)
         mask = batch["mask"].to(device, non_blocking=True)
 
-        with autocast(enabled=config.training.mixed_precision):
+        with autocast("cuda", enabled=use_amp):
             output = model(image1, image2)
             loss = criterion(output["pred"], mask)
 
@@ -213,8 +216,11 @@ def validate(
 
         # Binarize predictions using sigmoid + threshold
         pred_binary = (
-            torch.sigmoid(output["pred"]) > config.evaluation.threshold
-        ).cpu().numpy().astype(int)
+            (torch.sigmoid(output["pred"]) > config.evaluation.threshold)
+            .cpu()
+            .numpy()
+            .astype(int)
+        )
         target_np = mask.cpu().numpy().astype(int)
 
         all_preds.append(pred_binary)
@@ -223,9 +229,9 @@ def validate(
     avg_loss = running_loss / max(num_batches, 1)
 
     # Compute metrics over the entire validation set
-    all_preds = np.concatenate(all_preds, axis=0)
-    all_targets = np.concatenate(all_targets, axis=0)
-    metrics = compute_metrics(all_preds, all_targets)
+    preds = np.concatenate(all_preds, axis=0)
+    targets = np.concatenate(all_targets, axis=0)
+    metrics = compute_metrics(preds, targets)
 
     return avg_loss, metrics
 
@@ -291,7 +297,9 @@ def train(config: Config) -> None:
     )
 
     if "train" not in loaders:
-        raise RuntimeError("Training data not found. See DATA.md for setup instructions.")
+        raise RuntimeError(
+            "Training data not found. See DATA.md for setup instructions."
+        )
 
     # Model
     print("Building model...")
@@ -327,7 +335,8 @@ def train(config: Config) -> None:
         eta_min=config.training.scheduler.min_lr,
     )
 
-    scaler = GradScaler(enabled=config.training.mixed_precision)
+    use_amp = config.training.mixed_precision and torch.cuda.is_available()
+    scaler = GradScaler("cuda", enabled=use_amp)
 
     # Logging
     writer = SummaryWriter(log_dir=config.paths.log_dir)
@@ -346,22 +355,32 @@ def train(config: Config) -> None:
     best_f1 = 0.0
 
     print(f"\nStarting training for {config.training.epochs} epochs...")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     for epoch in range(config.training.epochs):
         start_time = time.time()
 
         # Train
         train_loss = train_one_epoch(
-            model, loaders["train"], criterion, optimizer, scaler,
-            device, epoch, config, writer,
+            model,
+            loaders["train"],
+            criterion,
+            optimizer,
+            scaler,
+            device,
+            epoch,
+            config,
+            writer,
         )
         train_losses.append(train_loss)
 
         # Validate
         val_loss, metrics = validate(
-            model, loaders.get("val", loaders["train"]),
-            criterion, device, config,
+            model,
+            loaders.get("val", loaders["train"]),
+            criterion,
+            device,
+            config,
         )
         val_losses.append(val_loss)
         val_f1_scores.append(metrics["f1"])
@@ -393,7 +412,12 @@ def train(config: Config) -> None:
         if metrics["f1"] > best_f1:
             best_f1 = metrics["f1"]
             save_checkpoint(
-                model, optimizer, scheduler, epoch, metrics, config,
+                model,
+                optimizer,
+                scheduler,
+                epoch,
+                metrics,
+                config,
                 Path(config.paths.checkpoint_dir) / "best_model.pth",
             )
             print(f"  -> New best F1: {best_f1:.4f}, checkpoint saved.")
@@ -405,18 +429,25 @@ def train(config: Config) -> None:
 
     # Save final model
     save_checkpoint(
-        model, optimizer, scheduler, epoch, metrics, config,
+        model,
+        optimizer,
+        scheduler,
+        epoch,
+        metrics,
+        config,
         Path(config.paths.checkpoint_dir) / "final_model.pth",
     )
 
     # Plot training curves
     plot_training_curves(
-        train_losses, val_losses, val_f1_scores,
+        train_losses,
+        val_losses,
+        val_f1_scores,
         save_path=Path(config.paths.results_dir) / "metrics" / "training_curves.png",
     )
 
     writer.close()
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Training complete. Best validation F1: {best_f1:.4f}")
     print(f"Checkpoints saved to: {config.paths.checkpoint_dir}")
 

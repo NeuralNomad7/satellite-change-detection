@@ -10,7 +10,7 @@ import argparse
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import yaml
 
@@ -117,21 +117,30 @@ class Config:
         Returns:
             Populated Config instance.
         """
-        with open(path, "r") as f:
+        with open(path) as f:
             raw = yaml.safe_load(f)
 
         config = cls()
 
-        # Map YAML structure to dataclass fields
+        # Map YAML structure to dataclass fields. Accept both the nested
+        # human-authored schema (experiment.name / experiment.seed) and the
+        # flat schema emitted by to_dict()/save_yaml() so configs round-trip.
         if "experiment" in raw:
-            config.experiment_name = raw["experiment"].get("name", config.experiment_name)
+            config.experiment_name = raw["experiment"].get(
+                "name", config.experiment_name
+            )
             config.seed = raw["experiment"].get("seed", config.seed)
+        config.experiment_name = raw.get("experiment_name", config.experiment_name)
+        config.seed = raw.get("seed", config.seed)
 
         if "model" in raw:
-            config.model = ModelConfig(**{
-                k: v for k, v in raw["model"].items()
-                if k in ModelConfig.__dataclass_fields__
-            })
+            config.model = ModelConfig(
+                **{
+                    k: v
+                    for k, v in raw["model"].items()
+                    if k in ModelConfig.__dataclass_fields__
+                }
+            )
 
         if "training" in raw:
             t = raw["training"]
@@ -143,21 +152,31 @@ class Config:
                 optimizer=OptimizerConfig(**t.get("optimizer", {})),
                 scheduler=SchedulerConfig(**t.get("scheduler", {})),
                 loss=LossConfig(**t.get("loss", {})),
-                early_stopping_patience=t.get("early_stopping", {}).get("patience", 15),
-                early_stopping_metric=t.get("early_stopping", {}).get("metric", "f1"),
+                early_stopping_patience=t.get("early_stopping", {}).get(
+                    "patience", t.get("early_stopping_patience", 15)
+                ),
+                early_stopping_metric=t.get("early_stopping", {}).get(
+                    "metric", t.get("early_stopping_metric", "f1")
+                ),
             )
 
         if "evaluation" in raw:
-            config.evaluation = EvalConfig(**{
-                k: v for k, v in raw["evaluation"].items()
-                if k in EvalConfig.__dataclass_fields__
-            })
+            config.evaluation = EvalConfig(
+                **{
+                    k: v
+                    for k, v in raw["evaluation"].items()
+                    if k in EvalConfig.__dataclass_fields__
+                }
+            )
 
         if "paths" in raw:
-            config.paths = PathConfig(**{
-                k: v for k, v in raw["paths"].items()
-                if k in PathConfig.__dataclass_fields__
-            })
+            config.paths = PathConfig(
+                **{
+                    k: v
+                    for k, v in raw["paths"].items()
+                    if k in PathConfig.__dataclass_fields__
+                }
+            )
 
         return config
 
@@ -168,6 +187,7 @@ class Config:
             Nested dictionary of all config values.
         """
         import dataclasses
+
         return dataclasses.asdict(self)
 
     def save_yaml(self, path: str | Path) -> None:
@@ -227,7 +247,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_config(args: Optional[argparse.Namespace] = None) -> Config:
+def load_config(args: argparse.Namespace | None = None) -> Config:
     """Load config from YAML and apply any CLI overrides.
 
     Args:

@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import albumentations as A
 import numpy as np
@@ -52,7 +52,7 @@ def load_image(path: str | Path) -> np.ndarray:
             raise ImportError(
                 "rasterio is required for loading GeoTIFF files. "
                 "Install it with: pip install rasterio"
-            )
+            ) from None
     else:
         img = np.array(Image.open(path).convert("RGB"), dtype=np.float32)
         return img
@@ -102,23 +102,23 @@ def get_transforms(
     transforms_list = []
 
     if split == "train":
-        transforms_list.extend([
-            A.RandomCrop(height=patch_size, width=patch_size),
-            A.HorizontalFlip(p=0.5),
-            A.VerticalFlip(p=0.5),
-            A.RandomRotate90(p=0.5),
-            # Apply photometric augmentation to simulate different
-            # atmospheric conditions between acquisition dates
-            A.RandomBrightnessContrast(
-                brightness_limit=0.2, contrast_limit=0.2, p=0.3
-            ),
-            A.GaussNoise(var_limit=(10.0, 50.0), p=0.2),
-        ])
+        transforms_list.extend(
+            [
+                A.RandomCrop(height=patch_size, width=patch_size),
+                A.HorizontalFlip(p=0.5),
+                A.VerticalFlip(p=0.5),
+                A.RandomRotate90(p=0.5),
+                # Apply photometric augmentation to simulate different
+                # atmospheric conditions between acquisition dates
+                A.RandomBrightnessContrast(
+                    brightness_limit=0.2, contrast_limit=0.2, p=0.3
+                ),
+                A.GaussNoise(var_limit=(10.0, 50.0), p=0.2),
+            ]
+        )
     else:
         # For validation/test: just center-crop to patch_size
-        transforms_list.append(
-            A.CenterCrop(height=patch_size, width=patch_size)
-        )
+        transforms_list.append(A.CenterCrop(height=patch_size, width=patch_size))
 
     # Normalize pixel values
     if normalization == "imagenet":
@@ -131,7 +131,9 @@ def get_transforms(
         )
     elif normalization == "minmax":
         transforms_list.append(
-            A.Normalize(mean=[0.0, 0.0, 0.0], std=[1.0, 1.0, 1.0], max_pixel_value=255.0)
+            A.Normalize(
+                mean=[0.0, 0.0, 0.0], std=[1.0, 1.0, 1.0], max_pixel_value=255.0
+            )
         )
 
     transforms_list.append(ToTensorV2())
@@ -165,8 +167,8 @@ class ChangeDetectionDataset(Dataset):
         self,
         root: str | Path,
         split: str = "train",
-        transform: Optional[A.Compose] = None,
-        band_indices: Optional[list[int]] = None,
+        transform: A.Compose | None = None,
+        band_indices: list[int] | None = None,
     ) -> None:
         self.root = Path(root)
         self.split = split
@@ -179,10 +181,13 @@ class ChangeDetectionDataset(Dataset):
         self.label_dir = self.root / "label"
 
         # Collect sorted file names (must match across directories)
-        self.filenames = sorted([
-            f for f in os.listdir(self.image_dir_a)
-            if f.endswith((".png", ".jpg", ".tif", ".tiff"))
-        ])
+        self.filenames = sorted(
+            [
+                f
+                for f in os.listdir(self.image_dir_a)
+                if f.endswith((".png", ".jpg", ".tif", ".tiff"))
+            ]
+        )
 
         if len(self.filenames) == 0:
             raise FileNotFoundError(
@@ -296,7 +301,7 @@ def build_dataloaders(
     patch_size: int = 256,
     normalization: str = "imagenet",
     oversample: bool = True,
-    band_indices: Optional[list[int]] = None,
+    band_indices: list[int] | None = None,
 ) -> dict[str, DataLoader]:
     """Build train, validation, and test DataLoaders.
 
