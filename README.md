@@ -19,7 +19,9 @@ A production-ready deep learning pipeline for detecting land-use and land-cover 
 ```mermaid
 graph LR
     subgraph DATA ["Data Pipeline"]
-        S2["Sentinel-2\nImagery"] --> PP["Preprocessing\n& Augmentation"]
+        AOI["AOI bbox\n+ two dates"] --> INGEST["Sentinel-2 Ingestion\nSTAC · SCL cloud mask"]
+        INGEST --> S2["Sentinel-2\nImage Pair"]
+        S2 --> PP["Preprocessing\n& Augmentation"]
         PP --> PAIRS["Bi-Temporal\nImage Pairs"]
     end
 
@@ -171,12 +173,14 @@ satellite-change-detection/
 │   ├── train.py                   # Training loop (AMP, deep supervision)
 │   ├── eval.py                    # Evaluation and inference
 │   ├── geo.py                     # Geospatial I/O + GeoJSON vectorization
+│   ├── ingest.py                  # Sentinel-2 STAC ingestion + cloud masking
 │   └── utils.py                   # Metrics and visualization
 ├── serving/                       # Production API
 │   └── app.py                     # FastAPI inference endpoint
 ├── scripts/
 │   ├── export_onnx.py             # ONNX export + benchmark
-│   └── predict_geo.py             # Georeferenced GeoTIFF inference
+│   ├── predict_geo.py             # Georeferenced GeoTIFF inference
+│   └── ingest_s2.py               # Sentinel-2 fetch (bbox + dates → pair)
 ├── notebooks/                     # Interactive workflows
 │   ├── 01_eda.ipynb               # Exploratory data analysis
 │   ├── 02_training.ipynb          # Training walkthrough
@@ -358,8 +362,52 @@ It returns JSON containing a GeoJSON `FeatureCollection` of change polygons
 drop straight onto a Leaflet map or into geojson.io.
 
 > **Note:** inputs must be co-registered (same grid) and in the pixel range the
-> model was trained on. Fetching, cloud-masking, and aligning raw Sentinel-2
-> scenes from a bounding box + two dates is the next milestone (ingestion module).
+> model was trained on. The **Sentinel-2 Ingestion** section below produces such
+> a pair automatically from a bounding box and two dates.
+
+## Sentinel-2 Ingestion
+
+The geospatial CLI and API above expect a *co-registered* GeoTIFF pair. The
+`src.ingest` module produces one directly from a bounding box and two dates by
+pulling real imagery from the [Microsoft Planetary
+Computer](https://planetarycomputer.microsoft.com/) STAC catalog — no manual
+downloading, reprojecting, or tile-wrangling.
+
+For each date it searches the `sentinel-2-l2a` collection, picks the
+least-cloudy scene, reprojects it onto a shared UTM grid at your chosen
+resolution, and screens clouds using the Scene Classification Layer (SCL). The
+result is `before.tif` / `after.tif` (already aligned), per-date cloud masks,
+and a `manifest.json` recording exactly which scenes were used.
+
+Install the optional dependencies and run it:
+
+```bash
+pip install -e ".[ingest]"
+
+sat-cd-ingest \
+  --bbox 12.30 45.40 12.45 45.50 \
+  --date-t1 2023-06-01/2023-06-30 \
+  --date-t2 2024-06-01/2024-06-30 \
+  --output-dir data/venice \
+  --resolution 10 \
+  --max-cloud 20
+```
+
+By default it uses Sentinel-2's pre-rendered 8-bit true-colour (`visual`) asset,
+whose value range and band order match the model. Pass
+`--asset bands --bands B04 B03 B02` to stack raw reflectance bands instead.
+
+End to end — from coordinates to change polygons:
+
+```bash
+sat-cd-ingest --bbox 12.30 45.40 12.45 45.50 \
+  --date-t1 2023-06-01/2023-06-30 --date-t2 2024-06-01/2024-06-30 \
+  --output-dir data/venice
+
+sat-cd-geo --checkpoint models/checkpoints/best_model.pth \
+  --image-t1 data/venice/before.tif --image-t2 data/venice/after.tif \
+  --output-dir results/venice
+```
 
 ## Space Applications
 
@@ -369,6 +417,15 @@ This pipeline is directly relevant to:
 - **Environmental monitoring**: Detecting deforestation, desertification, and wetland loss
 - **Agriculture**: Identifying crop rotation patterns and irrigation changes
 - **Defense and intelligence**: Monitoring infrastructure changes at points of interest
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the
+development setup and the exact checks CI runs, and [CHANGELOG.md](CHANGELOG.md)
+for the release history.
+
+To report a security issue, please follow [SECURITY.md](SECURITY.md) rather than
+opening a public issue.
 
 ## Citation
 
