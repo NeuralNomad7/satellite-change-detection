@@ -323,11 +323,92 @@ def mask_to_polygons(
     return {"type": "FeatureCollection", "features": features}
 
 
+def as_boolean_mask(mask: np.ndarray) -> np.ndarray:
+    """Collapse a raster into a 2-D boolean mask.
+
+    Accepts ``(H, W)`` or ``(H, W, C)`` input -- the shape :func:`read_geotiff`
+    returns for a single-band mask GeoTIFF -- and treats any nonzero pixel in
+    any band as set.
+    """
+    arr = np.asarray(mask)
+    if arr.ndim == 3:
+        return np.any(arr != 0, axis=2)
+    return arr != 0
+
+
+def combine_invalid_masks(*masks: np.ndarray | None) -> np.ndarray | None:
+    """Union per-date cloud/nodata masks into one "cannot observe" mask.
+
+    A pixel is unusable when *any* date is obscured: if one acquisition is under
+    cloud, there is nothing to compare against, so the model's output there says
+    more about the weather than about the ground.
+
+    Args:
+        *masks: Per-date masks, each ``(H, W)`` or ``(H, W, C)``. ``None`` entries
+            are ignored, so callers can pass optional masks straight through.
+
+    Returns:
+        A boolean ``(H, W)`` mask, or ``None`` if no masks were supplied.
+
+    Raises:
+        ValueError: If the supplied masks have different shapes.
+    """
+    resolved = [as_boolean_mask(m) for m in masks if m is not None]
+    if not resolved:
+        return None
+
+    shapes = {m.shape for m in resolved}
+    if len(shapes) > 1:
+        raise ValueError(
+            f"Cloud masks must share a grid; got shapes {sorted(shapes)}. "
+            "Co-register them first."
+        )
+
+    combined = resolved[0]
+    for extra in resolved[1:]:
+        combined = np.logical_or(combined, extra)
+    return combined
+
+
+def apply_validity_mask(
+    change_mask: np.ndarray, invalid_mask: np.ndarray | None
+) -> np.ndarray:
+    """Suppress predicted change wherever the scene could not be observed.
+
+    Cloud arriving or clearing between two dates is a large radiometric change,
+    so an unmasked model reports it as ground change. Zeroing those pixels keeps
+    the output to areas that were actually visible on both dates.
+
+    Args:
+        change_mask: Binary change mask ``(H, W)``.
+        invalid_mask: Boolean mask of unobservable pixels, or ``None`` for a
+            no-op.
+
+    Returns:
+        A uint8 change mask with obscured pixels cleared.
+
+    Raises:
+        ValueError: If the two masks have different shapes.
+    """
+    arr = (np.asarray(change_mask) > 0).astype(np.uint8)
+    if invalid_mask is None:
+        return arr
+
+    invalid = as_boolean_mask(invalid_mask)
+    if invalid.shape != arr.shape:
+        raise ValueError(
+            f"Cloud mask shape {invalid.shape} does not match change mask "
+            f"shape {arr.shape}. Co-register them first."
+        )
+    return np.where(invalid, 0, arr).astype(np.uint8)
+
+
 def change_statistics(
     mask: np.ndarray,
     transform: Affine | None = None,
     crs: CRS | str | None = None,
     polygons: dict[str, Any] | None = None,
+    invalid_mask: np.ndarray | None = None,
 ) -> dict[str, Any]:
     """Summarize a change mask: changed area, fraction, and region count.
 
@@ -337,6 +418,10 @@ def change_statistics(
         crs: Coordinate reference system of the mask raster.
         polygons: Optional precomputed :func:`mask_to_polygons` output, to avoid
             recomputing it.
+        invalid_mask: Optional boolean mask of pixels that could not be observed
+            (e.g. the union of both dates' clouds). When supplied, the summary
+            also reports how much of the AOI was obscured and expresses change
+            as a fraction of the *observed* area rather than the whole scene.
 
     Returns:
         Dictionary of summary statistics. Area fields are ``None`` when no CRS
@@ -374,7 +459,74 @@ def change_statistics(
     }
     if transform is not None and crs_obj is not None and crs_obj.is_projected:
         stats["pixel_size_m"] = [round(abs(transform.a), 4), round(abs(transform.e), 4)]
+
+    if invalid_mask is not None:
+        stats.update(
+            _observability_statistics(
+                mask_arr,
+                invalid_mask,
+                changed_pixels=changed_pixels,
+                transform=transform,
+                crs=crs_obj,
+            )
+        )
     return stats
+
+
+def _observability_statistics(
+    mask_arr: np.ndarray,
+    invalid_mask: np.ndarray,
+    *,
+    changed_pixels: int,
+    transform: Affine | None,
+    crs: CRS | None,
+) -> dict[str, Any]:
+    """Cloud-cover context for :func:`change_statistics`.
+
+    ``change_fraction`` alone is misleading under cloud: a scene that is 60%
+    obscured can only ever report change over the remaining 40%, so the
+    fraction of *observed* area is the number worth acting on.
+    """
+    invalid = as_boolean_mask(invalid_mask)
+    if invalid.shape != mask_arr.shape:
+        raise ValueError(
+            f"Cloud mask shape {invalid.shape} does not match change mask "
+            f"shape {mask_arr.shape}. Co-register them first."
+        )
+
+    total_pixels = int(mask_arr.size)
+    obscured_pixels = int(invalid.sum())
+    valid_pixels = total_pixels - obscured_pixels
+
+    # Reuse the polygon area machinery so obscured area is measured the same way
+    # as changed area, including the equal-area path for geographic rasters.
+    obscured_area_m2: float | None = None
+    if crs is not None:
+        obscured_fc = mask_to_polygons(
+            invalid.astype(np.uint8), transform=transform, crs=crs
+        )
+        obscured_areas = [
+            f["properties"]["area_m2"]
+            for f in obscured_fc["features"]
+            if f["properties"].get("area_m2") is not None
+        ]
+        obscured_area_m2 = float(sum(obscured_areas)) if obscured_areas else 0.0
+
+    return {
+        "obscured_pixels": obscured_pixels,
+        "valid_pixels": valid_pixels,
+        "obscured_fraction": (
+            round(obscured_pixels / total_pixels, 6) if total_pixels else 0.0
+        ),
+        "change_fraction_of_valid": (
+            round(changed_pixels / valid_pixels, 6) if valid_pixels else None
+        ),
+        "obscured_area_ha": (
+            round(obscured_area_m2 / 10_000.0, 4)
+            if obscured_area_m2 is not None
+            else None
+        ),
+    }
 
 
 def save_geojson(feature_collection: dict[str, Any], path: str | Path) -> None:
