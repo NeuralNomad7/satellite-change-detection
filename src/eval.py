@@ -17,13 +17,11 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from torch.cuda.amp import autocast
+from torch.amp import autocast
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -104,7 +102,7 @@ def predict_single(
     image1 = image1.to(device)
     image2 = image2.to(device)
 
-    with autocast():
+    with autocast("cuda", enabled=torch.cuda.is_available()):
         output = model(image1, image2)
 
     # Sigmoid to get probabilities, then threshold to get binary mask
@@ -165,7 +163,7 @@ def sliding_window_inference(
             patch1 = image1[:, y_start:y_end, x_start:x_end].unsqueeze(0).to(device)
             patch2 = image2[:, y_start:y_end, x_start:x_end].unsqueeze(0).to(device)
 
-            with autocast():
+            with autocast("cuda", enabled=torch.cuda.is_available()):
                 output = model(patch1, patch2)
 
             pred_prob = torch.sigmoid(output["pred"]).squeeze().cpu().numpy()
@@ -223,7 +221,7 @@ def evaluate_test_set(
         image2 = batch["image2"].to(device, non_blocking=True)
         mask = batch["mask"]
 
-        with autocast():
+        with autocast("cuda", enabled=torch.cuda.is_available()):
             output = model(image1, image2)
 
         pred_prob = torch.sigmoid(output["pred"]).cpu()
@@ -259,12 +257,12 @@ def evaluate_test_set(
                 )
 
     # Aggregate metrics
-    all_preds = np.concatenate(all_preds, axis=0)
-    all_targets = np.concatenate(all_targets, axis=0)
-    aggregate_metrics = compute_metrics(all_preds, all_targets)
+    preds = np.concatenate(all_preds, axis=0)
+    targets = np.concatenate(all_targets, axis=0)
+    aggregate_metrics = compute_metrics(preds, targets)
 
     # Confusion matrix
-    cm = compute_confusion_matrix(all_preds, all_targets)
+    cm = compute_confusion_matrix(preds, targets)
     plot_confusion_matrix(
         cm,
         save_path=Path(config.paths.results_dir) / "metrics" / "confusion_matrix.png",
@@ -285,12 +283,12 @@ def evaluate_test_set(
         )
 
     # Print results
-    print(f"\n{'='*50}")
+    print(f"\n{'=' * 50}")
     print("Test Set Results:")
-    print(f"{'='*50}")
+    print(f"{'=' * 50}")
     for name, value in aggregate_metrics.items():
         print(f"  {name:>12s}: {value:.4f}")
-    print(f"{'='*50}")
+    print(f"{'=' * 50}")
 
     return aggregate_metrics
 
@@ -328,7 +326,7 @@ def main() -> None:
         raise RuntimeError("Test data not found. Check your data directory structure.")
 
     # Run evaluation
-    metrics = evaluate_test_set(model, loaders["test"], device, config)
+    evaluate_test_set(model, loaders["test"], device, config)
 
     print(f"\nResults saved to: {config.paths.results_dir}")
 

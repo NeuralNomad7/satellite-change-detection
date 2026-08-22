@@ -73,6 +73,10 @@ def export_to_onnx(
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
     print(f"Exporting to ONNX (opset {opset_version})...")
+    # dynamo=False keeps the TorchScript exporter, which supports this model's
+    # data-dependent control flow and the dynamic_axes API. PyTorch 2.9 made the
+    # torch.export-based exporter the default; pinning here keeps behavior stable
+    # across the supported torch range.
     torch.onnx.export(
         model,
         (x1, x2),
@@ -86,6 +90,7 @@ def export_to_onnx(
         },
         opset_version=opset_version,
         do_constant_folding=True,
+        dynamo=False,
     )
 
     # Validate
@@ -195,9 +200,9 @@ def benchmark_onnx(
 
 def print_benchmark_table(results: dict[str, dict[str, float]]) -> None:
     """Pretty-print benchmark results as a comparison table."""
-    print(f"\n{'='*65}")
+    print(f"\n{'=' * 65}")
     print(f"{'Inference Benchmark Results':^65}")
-    print(f"{'='*65}")
+    print(f"{'=' * 65}")
     print(f"{'Metric':<15}", end="")
     for name in results:
         print(f"{name:>20}", end="")
@@ -205,9 +210,17 @@ def print_benchmark_table(results: dict[str, dict[str, float]]) -> None:
     print("-" * 65)
 
     metrics = ["mean_ms", "std_ms", "min_ms", "max_ms", "p50_ms", "p95_ms", "p99_ms"]
-    labels = ["Mean (ms)", "Std (ms)", "Min (ms)", "Max (ms)", "P50 (ms)", "P95 (ms)", "P99 (ms)"]
+    labels = [
+        "Mean (ms)",
+        "Std (ms)",
+        "Min (ms)",
+        "Max (ms)",
+        "P50 (ms)",
+        "P95 (ms)",
+        "P99 (ms)",
+    ]
 
-    for label, metric in zip(labels, metrics):
+    for label, metric in zip(labels, metrics, strict=False):
         print(f"{label:<15}", end="")
         for name in results:
             val = results[name].get(metric, 0)
@@ -221,18 +234,35 @@ def print_benchmark_table(results: dict[str, dict[str, float]]) -> None:
         print("-" * 65)
         print(f"{'Speedup':<15}{speedup:>40.2f}x ({names[1]} vs {names[0]})")
 
-    print(f"{'='*65}")
+    print(f"{'=' * 65}")
 
 
 def main():
     parser = argparse.ArgumentParser(description="Export model to ONNX and benchmark")
-    parser.add_argument("--checkpoint", type=str, default=None, help="Path to .pth checkpoint")
-    parser.add_argument("--output", type=str, default="models/exports/model.onnx", help="ONNX output path")
-    parser.add_argument("--input-size", type=int, default=256, help="Input spatial resolution")
-    parser.add_argument("--in-channels", type=int, default=3, help="Number of input channels")
-    parser.add_argument("--num-runs", type=int, default=50, help="Number of benchmark iterations")
-    parser.add_argument("--benchmark-only", action="store_true", help="Skip export, only benchmark")
-    parser.add_argument("--onnx-path", type=str, default=None, help="ONNX model path for benchmark")
+    parser.add_argument(
+        "--checkpoint", type=str, default=None, help="Path to .pth checkpoint"
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        default="models/exports/model.onnx",
+        help="ONNX output path",
+    )
+    parser.add_argument(
+        "--input-size", type=int, default=256, help="Input spatial resolution"
+    )
+    parser.add_argument(
+        "--in-channels", type=int, default=3, help="Number of input channels"
+    )
+    parser.add_argument(
+        "--num-runs", type=int, default=50, help="Number of benchmark iterations"
+    )
+    parser.add_argument(
+        "--benchmark-only", action="store_true", help="Skip export, only benchmark"
+    )
+    parser.add_argument(
+        "--onnx-path", type=str, default=None, help="ONNX model path for benchmark"
+    )
     args = parser.parse_args()
 
     onnx_path = args.onnx_path or args.output
@@ -247,24 +277,35 @@ def main():
         )
 
     # Benchmark
-    print(f"\nRunning benchmark ({args.num_runs} iterations, {args.input_size}x{args.input_size})...")
+    print(
+        f"\nRunning benchmark ({args.num_runs} iterations, {args.input_size}x{args.input_size})..."
+    )
 
     results = {}
 
     # PyTorch benchmark
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"\nPyTorch ({device})...")
-    model = build_model(in_channels=args.in_channels, pretrained=False, deep_supervision=False)
+    model = build_model(
+        in_channels=args.in_channels, pretrained=False, deep_supervision=False
+    )
     results["PyTorch"] = benchmark_pytorch(
-        model, device, args.input_size, args.in_channels, num_runs=args.num_runs,
+        model,
+        device,
+        args.input_size,
+        args.in_channels,
+        num_runs=args.num_runs,
     )
 
     # ONNX benchmark
     if Path(onnx_path).exists():
         try:
-            print(f"\nONNX Runtime...")
+            print("\nONNX Runtime...")
             results["ONNX-RT"] = benchmark_onnx(
-                onnx_path, args.input_size, args.in_channels, num_runs=args.num_runs,
+                onnx_path,
+                args.input_size,
+                args.in_channels,
+                num_runs=args.num_runs,
             )
         except ImportError:
             print("onnxruntime not installed, skipping ONNX benchmark")

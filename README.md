@@ -3,7 +3,7 @@
 A production-ready deep learning pipeline for detecting land-use and land-cover changes from multi-temporal Sentinel-2 satellite imagery. Built with PyTorch, this project implements a Siamese U-Net architecture that compares bi-temporal image pairs to produce pixel-level change maps -- from training to deployment.
 
 [![CI](https://github.com/neuralnomad7/satellite-change-detection/actions/workflows/ci.yml/badge.svg)](https://github.com/neuralnomad7/satellite-change-detection/actions)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 <p align="center">
@@ -138,8 +138,8 @@ graph LR
 graph LR
     PUSH["git push"] --> CI["GitHub Actions"]
 
-    CI --> LINT["Lint & Format\nBlack · Flake8 · mypy"]
-    CI --> TEST["Test Matrix\nPython 3.9 · 3.10 · 3.11\npytest + coverage"]
+    CI --> LINT["Lint & Format\nRuff · mypy"]
+    CI --> TEST["Test Matrix\nPython 3.10 → 3.13\npytest + coverage"]
     CI --> SMOKE["Model Smoke Test\nForward pass shape\nONNX export validation"]
 
     LINT --> PASS["All Checks Pass"]
@@ -196,11 +196,13 @@ cd satellite-change-detection
 
 # Create environment
 python -m venv venv
-source venv/bin/activate
+source venv/bin/activate        # Windows: venv\Scripts\activate
 
-# Install dependencies
-pip install -r requirements.txt
+# Install the package with its runtime dependencies
 pip install -e .
+
+# ...or include the dev tooling (Ruff, mypy, pytest, pre-commit)
+pip install -e ".[dev]"
 ```
 
 ## Quick Start
@@ -328,7 +330,7 @@ If you use this project in your research, please cite:
 ```bibtex
 @software{satellite_change_detection_2026,
   title={Satellite Imagery Change Detection with Siamese U-Net},
-  author={Your Name},
+  author={NeuralNomad7},
   year={2026},
   url={https://github.com/neuralnomad7/satellite-change-detection}
 }

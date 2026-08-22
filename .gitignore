@@ -26,6 +26,11 @@ env/
 # Jupyter
 .ipynb_checkpoints/
 
+# Linting / type-checking caches
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+
 # Data files (large, not tracked)
 data/raw/*
 data/processed/*

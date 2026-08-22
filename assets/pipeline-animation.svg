@@ -333,7 +333,7 @@
     <!-- CI/CD -->
     <rect x="755" y="276" width="223" height="50" rx="8" fill="#1c2333" stroke="#a371f7" filter="url(#softShadow)"/>
     <text x="866" y="296" text-anchor="middle" fill="#d2a8ff" font-size="10" font-weight="700">GitHub Actions CI/CD</text>
-    <text x="866" y="310" text-anchor="middle" fill="#8b949e" font-size="8">Lint · Test (3.9-3.11) · Model Smoke</text>
+    <text x="866" y="310" text-anchor="middle" fill="#8b949e" font-size="8">Lint · Test (3.10-3.13) · Model Smoke</text>
 
     <!-- Animated check marks -->
     <circle cx="770" cy="300" r="5" fill="#238636" opacity="0">
