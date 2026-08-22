@@ -48,6 +48,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Raised the `albumentations` floor to `>=2.0.0` so the transform API is
   unambiguous.
+- Updated `actions/checkout`, `actions/setup-python`, and `actions/upload-artifact`
+  to v7. The pinned majors targeted Node 20, which GitHub has deprecated and was
+  force-running on Node 24.
 - CI can be triggered manually via `workflow_dispatch`.
 
 ### Removed
