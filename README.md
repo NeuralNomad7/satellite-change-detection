@@ -418,6 +418,15 @@ This pipeline is directly relevant to:
 - **Agriculture**: Identifying crop rotation patterns and irrigation changes
 - **Defense and intelligence**: Monitoring infrastructure changes at points of interest
 
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the
+development setup and the exact checks CI runs, and [CHANGELOG.md](CHANGELOG.md)
+for the release history.
+
+To report a security issue, please follow [SECURITY.md](SECURITY.md) rather than
+opening a public issue.
+
 ## Citation
 
 If you use this project in your research, please cite:
