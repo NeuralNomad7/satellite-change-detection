@@ -31,7 +31,7 @@ tqdm>=4.66.0
 # Model serving
 fastapi>=0.110.0
 uvicorn>=0.29.0
-python-multipart>=0.0.9
+python-multipart>=0.0.32
 
 # Model export and optimization
 onnx>=1.16.0
