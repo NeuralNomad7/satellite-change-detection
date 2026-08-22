@@ -239,7 +239,7 @@ def validate(
 def save_checkpoint(
     model: nn.Module,
     optimizer: torch.optim.Optimizer,
-    scheduler: torch.optim.lr_scheduler._LRScheduler,
+    scheduler: torch.optim.lr_scheduler.LRScheduler,
     epoch: int,
     metrics: dict[str, float],
     config: Config,
@@ -321,11 +321,13 @@ def train(config: Config) -> None:
         dice_weight=config.training.loss.dice_weight,
     )
 
+    # AdamW expects exactly two betas; tuple(...) alone widens to tuple[float, ...]
+    beta1, beta2 = config.training.optimizer.betas
     optimizer = AdamW(
         model.parameters(),
         lr=config.training.optimizer.lr,
         weight_decay=config.training.optimizer.weight_decay,
-        betas=tuple(config.training.optimizer.betas),
+        betas=(float(beta1), float(beta2)),
     )
 
     scheduler = CosineAnnealingWarmRestarts(
