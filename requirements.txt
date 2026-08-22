@@ -1,6 +1,6 @@
 # Core deep learning
 torch>=2.6.0
-torchvision>=0.21.0
+torchvision>=0.28.0
 
 # Scientific computing
 numpy>=1.26.0
