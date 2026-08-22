@@ -13,7 +13,10 @@ from rasterio.crs import CRS
 from rasterio.transform import from_origin
 
 from src.geo import (
+    apply_validity_mask,
+    as_boolean_mask,
     change_statistics,
+    combine_invalid_masks,
     mask_to_polygons,
     normalize_imagenet,
     read_geotiff,
@@ -160,3 +163,120 @@ def test_normalize_imagenet_rejects_too_few_bands():
 
     with pytest.raises(ValueError, match="expects"):
         normalize_imagenet(data, in_channels=3)
+
+
+# ---------------------------------------------------------------------------
+# Cloud / observability masking
+# ---------------------------------------------------------------------------
+
+
+def _cloud_band(rows: int, size: int = 100) -> np.ndarray:
+    """Cloud over the top ``rows`` rows of a ``size``x``size`` grid."""
+    cloud = np.zeros((size, size), dtype=np.uint8)
+    cloud[:rows, :] = 1
+    return cloud
+
+
+def test_as_boolean_mask_accepts_2d_and_3d():
+    """read_geotiff returns (H, W, C) even for a single-band mask."""
+    flat = np.array([[0, 1], [2, 0]], dtype=np.uint8)
+    np.testing.assert_array_equal(
+        as_boolean_mask(flat), np.array([[False, True], [True, False]])
+    )
+    np.testing.assert_array_equal(
+        as_boolean_mask(flat[:, :, None]), as_boolean_mask(flat)
+    )
+
+
+def test_combine_invalid_masks_unions_both_dates():
+    """A pixel is unusable if EITHER date is obscured."""
+    t1 = np.zeros((4, 4), dtype=np.uint8)
+    t1[0, :] = 1
+    t2 = np.zeros((4, 4), dtype=np.uint8)
+    t2[3, :] = 1
+
+    combined = combine_invalid_masks(t1, t2)
+
+    assert combined.sum() == 8
+    assert combined[0].all() and combined[3].all()
+    assert not combined[1].any() and not combined[2].any()
+
+
+def test_combine_invalid_masks_ignores_none_and_handles_empty():
+    only = np.ones((2, 2), dtype=np.uint8)
+    np.testing.assert_array_equal(
+        combine_invalid_masks(None, only), as_boolean_mask(only)
+    )
+    assert combine_invalid_masks(None, None) is None
+    assert combine_invalid_masks() is None
+
+
+def test_combine_invalid_masks_rejects_mismatched_grids():
+    with pytest.raises(ValueError, match="share a grid"):
+        combine_invalid_masks(np.zeros((4, 4)), np.zeros((5, 5)))
+
+
+def test_apply_validity_mask_suppresses_change_under_cloud():
+    mask = _rectangle_mask()
+    assert mask.sum() == 200
+
+    # Cloud over the top 20 rows clips the change block (rows 10-30) in half.
+    cleaned = apply_validity_mask(mask, _cloud_band(20))
+
+    assert cleaned.sum() == 100
+    assert not cleaned[:20].any(), "change under cloud should be suppressed"
+    assert cleaned[20:30, 10:20].all(), "clear-sky change must survive"
+
+
+def test_apply_validity_mask_without_mask_is_a_noop():
+    mask = _rectangle_mask()
+    np.testing.assert_array_equal(apply_validity_mask(mask, None), mask)
+
+
+def test_apply_validity_mask_rejects_mismatched_shape():
+    with pytest.raises(ValueError, match="does not match"):
+        apply_validity_mask(np.zeros((4, 4)), np.zeros((5, 5)))
+
+
+def test_change_statistics_reports_observed_area():
+    """Change should be expressed against the area actually visible."""
+    mask = apply_validity_mask(_rectangle_mask(), _cloud_band(20))
+
+    stats = change_statistics(
+        mask,
+        transform=UTM_TRANSFORM,
+        crs=UTM_CRS,
+        invalid_mask=_cloud_band(20),
+    )
+
+    assert stats["total_pixels"] == 10_000
+    assert stats["changed_pixels"] == 100
+    assert stats["obscured_pixels"] == 2_000
+    assert stats["valid_pixels"] == 8_000
+    assert stats["obscured_fraction"] == pytest.approx(0.2)
+    # 100 changed of 8,000 observed -- not 100 of 10,000.
+    assert stats["change_fraction_of_valid"] == pytest.approx(100 / 8_000)
+    assert stats["change_fraction"] == pytest.approx(100 / 10_000)
+    # 2,000 px at 10 m = 200,000 m2 = 20 ha
+    assert stats["obscured_area_ha"] == pytest.approx(20.0)
+
+
+def test_change_statistics_without_invalid_mask_omits_cloud_fields():
+    stats = change_statistics(_rectangle_mask(), transform=UTM_TRANSFORM, crs=UTM_CRS)
+    for field in ("obscured_pixels", "valid_pixels", "change_fraction_of_valid"):
+        assert field not in stats
+
+
+def test_fully_obscured_scene_reports_no_change():
+    """A totally clouded AOI must not report change it could not have seen."""
+    cloud = np.ones((100, 100), dtype=np.uint8)
+    mask = apply_validity_mask(_rectangle_mask(), cloud)
+
+    stats = change_statistics(
+        mask, transform=UTM_TRANSFORM, crs=UTM_CRS, invalid_mask=cloud
+    )
+
+    assert stats["changed_pixels"] == 0
+    assert stats["valid_pixels"] == 0
+    assert stats["change_fraction_of_valid"] is None
+    assert stats["obscured_fraction"] == pytest.approx(1.0)

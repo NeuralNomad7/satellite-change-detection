@@ -16,11 +16,21 @@ Usage:
         --image-t2 after.tif \
         --output-dir results/geo
 
+Cloud masking:
+    Cloud arriving or clearing between two dates is a large radiometric change,
+    so an unmasked model reports it as ground change. Pass the per-date cloud
+    masks written by ``sat-cd-ingest`` to suppress those false positives and to
+    report change as a fraction of the area actually observed on both dates::
+
+        python scripts/predict_geo.py ... --manifest data/venice/manifest.json
+
+    ``--manifest`` picks up both masks automatically; ``--cloud-mask-t1`` and
+    ``--cloud-mask-t2`` override it or work standalone.
+
 Note:
     This expects the two GeoTIFFs to already be co-registered (same grid) and in
     the same pixel value range the model was trained on (0-255 RGB by default).
-    Fetching, cloud-masking and aligning raw Sentinel-2 scenes is handled by the
-    forthcoming ingestion module (Phase 2).
+    ``sat-cd-ingest`` produces exactly that from a bounding box and two dates.
 """
 
 from __future__ import annotations
@@ -40,7 +50,9 @@ from src.eval import (
 )
 from src.geo import (
     GeoRaster,
+    apply_validity_mask,
     change_statistics,
+    combine_invalid_masks,
     mask_to_polygons,
     normalize_imagenet,
     read_geotiff,
@@ -48,6 +60,57 @@ from src.geo import (
     write_geotiff,
 )
 from src.utils import get_device, set_seed
+
+
+def resolve_cloud_mask_paths(
+    manifest: str | None,
+    cloud_mask_t1: str | None,
+    cloud_mask_t2: str | None,
+) -> tuple[str | None, str | None]:
+    """Work out which cloud masks to use, preferring explicit flags.
+
+    ``sat-cd-ingest`` records its per-date masks under ``outputs.before_cloud``
+    and ``outputs.after_cloud`` in ``manifest.json``, so pointing at the manifest
+    is enough to close the loop from ingestion to inference.
+    """
+    t1, t2 = cloud_mask_t1, cloud_mask_t2
+    if manifest is not None and (t1 is None or t2 is None):
+        with open(manifest) as f:
+            outputs = json.load(f).get("outputs", {})
+        if t1 is None:
+            t1 = outputs.get("before_cloud")
+        if t2 is None:
+            t2 = outputs.get("after_cloud")
+        if t1 is None and t2 is None:
+            print(
+                f"Warning: {manifest} lists no cloud masks "
+                "(was the pair ingested with --no-cloud-masks?); "
+                "continuing without cloud masking."
+            )
+    return t1, t2
+
+
+def load_invalid_mask(
+    cloud_mask_t1: str | None,
+    cloud_mask_t2: str | None,
+    expected_shape: tuple[int, int],
+) -> np.ndarray | None:
+    """Read and union the per-date cloud masks onto the change-mask grid."""
+    masks = []
+    for label, path in (("T1", cloud_mask_t1), ("T2", cloud_mask_t2)):
+        if path is None:
+            continue
+        raster = read_geotiff(path)
+        if raster.data.shape[:2] != expected_shape:
+            raise ValueError(
+                f"{label} cloud mask {path} has shape {raster.data.shape[:2]}, "
+                f"expected {expected_shape}. Co-register it with the imagery."
+            )
+        masks.append(raster.data)
+
+    if not masks:
+        return None
+    return combine_invalid_masks(*masks)
 
 
 def run_geo_inference(
@@ -120,6 +183,24 @@ def _parse_args() -> argparse.Namespace:
         help="Drop change regions smaller than this many square metres",
     )
     parser.add_argument(
+        "--manifest",
+        type=str,
+        default=None,
+        help="sat-cd-ingest manifest.json; sources both cloud masks automatically",
+    )
+    parser.add_argument(
+        "--cloud-mask-t1",
+        type=str,
+        default=None,
+        help="Cloud mask GeoTIFF for the pre-change date (nonzero = cloud)",
+    )
+    parser.add_argument(
+        "--cloud-mask-t2",
+        type=str,
+        default=None,
+        help="Cloud mask GeoTIFF for the post-change date (nonzero = cloud)",
+    )
+    parser.add_argument(
         "--device", type=str, default=None, help="Device override (e.g. 'cpu')"
     )
     return parser.parse_args()
@@ -179,6 +260,21 @@ def main() -> None:
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    # Suppress change wherever either date was under cloud -- otherwise weather
+    # between acquisitions shows up as ground change.
+    cloud_t1, cloud_t2 = resolve_cloud_mask_paths(
+        args.manifest, args.cloud_mask_t1, args.cloud_mask_t2
+    )
+    invalid_mask = load_invalid_mask(cloud_t1, cloud_t2, mask.shape[:2])
+    if invalid_mask is not None:
+        raw_changed = int((mask > 0).sum())
+        mask = apply_validity_mask(mask, invalid_mask)
+        suppressed = raw_changed - int(mask.sum())
+        print(
+            f"Cloud masking: {int(invalid_mask.sum()):,} obscured pixels; "
+            f"suppressed {suppressed:,} change pixels."
+        )
+
     mask_path = out_dir / "change_mask.tif"
     write_geotiff(
         mask_path,
@@ -199,7 +295,11 @@ def main() -> None:
     save_geojson(polygons, geojson_path)
 
     stats = change_statistics(
-        mask, transform=raster1.transform, crs=raster1.crs, polygons=polygons
+        mask,
+        transform=raster1.transform,
+        crs=raster1.crs,
+        polygons=polygons,
+        invalid_mask=invalid_mask,
     )
     stats_path = out_dir / "change_stats.json"
     with open(stats_path, "w") as f:
@@ -213,6 +313,10 @@ def main() -> None:
     print(f"  Change regions : {stats['num_change_regions']:,}")
     if stats["changed_area_ha"] is not None:
         print(f"  Changed area   : {stats['changed_area_ha']:.2f} ha")
+    if "obscured_fraction" in stats:
+        print(f"  Cloud obscured : {stats['obscured_fraction']:.2%} of the AOI")
+        if stats["change_fraction_of_valid"] is not None:
+            print(f"  Change / valid : {stats['change_fraction_of_valid']:.4f}")
     print(f"{'=' * 50}")
     print(f"  Mask    -> {mask_path}")
     print(f"  Polygons-> {geojson_path}")

@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Cloud-aware inference.** `sat-cd-ingest` already computed per-date SCL cloud
+  masks, but nothing consumed them, so cloud arriving or clearing between two
+  dates was reported as ground change. `sat-cd-geo` now accepts `--manifest`
+  (which sources both masks from the ingestion manifest) or explicit
+  `--cloud-mask-t1` / `--cloud-mask-t2`, and suppresses change wherever either
+  date was obscured.
+  - New in `src.geo`: `as_boolean_mask`, `combine_invalid_masks`, and
+    `apply_validity_mask`.
+  - `change_statistics` takes an optional `invalid_mask` and additionally reports
+    `obscured_pixels`, `valid_pixels`, `obscured_fraction`, `obscured_area_ha`,
+    and `change_fraction_of_valid` — change measured against the area actually
+    observed rather than the whole scene.
+  - On a scene where cloud covered one date, this cut a 544 ha / 2-region report
+    down to 144 ha / 1 region, with 19% of the AOI flagged as obscured.
+- `tests/test_predict_geo.py` covering the cloud-mask plumbing, plus cloud and
+  observability tests in `tests/test_geo.py`.
 - `tests/test_data_loader.py`, covering the augmentation pipeline and mask
   decoding. Includes a guard that promotes albumentations' "unrecognized
   argument" `UserWarning` to an error, so a renamed parameter fails CI instead
