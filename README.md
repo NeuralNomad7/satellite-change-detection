@@ -406,8 +406,45 @@ sat-cd-ingest --bbox 12.30 45.40 12.45 45.50 \
 
 sat-cd-geo --checkpoint models/checkpoints/best_model.pth \
   --image-t1 data/venice/before.tif --image-t2 data/venice/after.tif \
+  --manifest data/venice/manifest.json \
   --output-dir results/venice
 ```
+
+## Cloud-Aware Inference
+
+Cloud arriving or clearing between two acquisition dates is a large radiometric
+change, so an unmasked model reports it as *ground* change. Ingestion already
+computes per-date SCL cloud masks — passing them to `sat-cd-geo` suppresses
+those false positives and reports change against the area that was genuinely
+visible on **both** dates.
+
+```bash
+# --manifest picks up both masks automatically
+sat-cd-geo ... --manifest data/venice/manifest.json
+
+# ...or point at them directly
+sat-cd-geo ... --cloud-mask-t1 data/venice/before_cloud.tif \
+               --cloud-mask-t2 data/venice/after_cloud.tif
+```
+
+A pixel is treated as unobservable if **either** date is obscured, since there is
+nothing to compare against. `change_stats.json` then gains:
+
+| Field | Meaning |
+|-------|---------|
+| `obscured_pixels` / `obscured_fraction` | How much of the AOI was hidden by cloud |
+| `valid_pixels` | Pixels observable on both dates |
+| `change_fraction_of_valid` | Change measured against observed area, not the whole scene |
+| `obscured_area_ha` | Cloud-obscured ground area |
+
+The distinction matters. On a scene where cloud rolled in over one date, the
+unmasked pipeline reported **544 ha** of change across 2 regions; with masking it
+reports **144 ha** across 1 region and flags 19% of the AOI as obscured — the
+other 400 ha was weather, not ground change.
+
+`change_fraction_of_valid` is the number to act on: a 60%-clouded scene can only
+ever observe change over the remaining 40%, and dividing by the full scene makes
+the landscape look more stable than the data supports.
 
 ## Space Applications
 
