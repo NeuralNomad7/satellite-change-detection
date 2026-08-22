@@ -1,0 +1,31 @@
+version: 2
+
+updates:
+  # Python dependencies (floors live in requirements.txt, extras in pyproject.toml)
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "python"]
+    commit-message:
+      prefix: "deps"
+    groups:
+      # Batch routine bumps into one PR; majors still arrive individually so
+      # breaking changes (e.g. the torch 2.6 -> 2.9 ONNX exporter flip) stay reviewable.
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  # GitHub Actions used by .github/workflows/ci.yml
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    labels: ["dependencies", "github-actions"]
+    commit-message:
+      prefix: "ci"
+    groups:
+      actions:
+        update-types: ["minor", "patch"]
