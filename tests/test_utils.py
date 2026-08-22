@@ -1,7 +1,6 @@
 """Tests for utility functions: metrics, visualization, and seeding."""
 
 import numpy as np
-import pytest
 
 from src.utils import (
     compute_confusion_matrix,
