@@ -71,8 +71,11 @@ def load_mask(path: str | Path) -> np.ndarray:
         Binary mask array of shape (H, W) with values in {0, 1}.
     """
     mask = np.array(Image.open(path).convert("L"), dtype=np.float32)
-    # Threshold at 128 to handle both 0/1 and 0/255 encoding
-    mask = (mask > 128).astype(np.float32)
+    # Datasets encode change either as 1 or as 255. A fixed 128 cutoff silently
+    # zeroes out every pixel of a 0/1-encoded mask, so pick the threshold from
+    # the data instead.
+    threshold = 0.5 if mask.max() <= 1.0 else 128.0
+    mask = (mask > threshold).astype(np.float32)
     return mask
 
 
@@ -113,7 +116,13 @@ def get_transforms(
                 A.RandomBrightnessContrast(
                     brightness_limit=0.2, contrast_limit=0.2, p=0.3
                 ),
-                A.GaussNoise(var_limit=(10.0, 50.0), p=0.2),
+                # albumentations 2.x replaced GaussNoise's `var_limit` (variance
+                # in 0-255 units) with `std_range` (std as a fraction of 255).
+                # Passing the old kwarg is silently ignored with only a
+                # UserWarning, so keep this on the current API.
+                # Equivalent to the previous var_limit=(10.0, 50.0):
+                #   sqrt(10)/255 ~= 0.012, sqrt(50)/255 ~= 0.028
+                A.GaussNoise(std_range=(0.012, 0.028), p=0.2),
             ]
         )
     else:
@@ -210,10 +219,11 @@ class ChangeDetectionDataset(Dataset):
         """
         filename = self.filenames[idx]
 
-        # Load both time steps and the change mask
+        # Load both time steps and the change mask. The mask starts as an
+        # ndarray and becomes a tensor once transforms (ToTensorV2) run.
         img_a = load_image(self.image_dir_a / filename)
         img_b = load_image(self.image_dir_b / filename)
-        mask = load_mask(self.label_dir / filename)
+        mask: np.ndarray | torch.Tensor = load_mask(self.label_dir / filename)
 
         # Select specific spectral bands if requested
         # (e.g., pick RGB from a 13-band Sentinel-2 image)

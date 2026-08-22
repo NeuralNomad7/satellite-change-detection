@@ -19,7 +19,9 @@ A production-ready deep learning pipeline for detecting land-use and land-cover 
 ```mermaid
 graph LR
     subgraph DATA ["Data Pipeline"]
-        S2["Sentinel-2\nImagery"] --> PP["Preprocessing\n& Augmentation"]
+        AOI["AOI bbox\n+ two dates"] --> INGEST["Sentinel-2 Ingestion\nSTAC · SCL cloud mask"]
+        INGEST --> S2["Sentinel-2\nImage Pair"]
+        S2 --> PP["Preprocessing\n& Augmentation"]
         PP --> PAIRS["Bi-Temporal\nImage Pairs"]
     end
 
@@ -37,6 +39,7 @@ graph LR
 
     subgraph OUTPUT ["Output"]
         API --> MASK["Change\nMask"]
+        API --> GEO["GeoTIFF +\nGeoJSON"]
         API --> DEMO["Streamlit\nDemo"]
     end
 
@@ -169,11 +172,15 @@ satellite-change-detection/
 │   ├── models.py                  # Siamese U-Net architecture
 │   ├── train.py                   # Training loop (AMP, deep supervision)
 │   ├── eval.py                    # Evaluation and inference
+│   ├── geo.py                     # Geospatial I/O + GeoJSON vectorization
+│   ├── ingest.py                  # Sentinel-2 STAC ingestion + cloud masking
 │   └── utils.py                   # Metrics and visualization
 ├── serving/                       # Production API
 │   └── app.py                     # FastAPI inference endpoint
 ├── scripts/
-│   └── export_onnx.py             # ONNX export + benchmark
+│   ├── export_onnx.py             # ONNX export + benchmark
+│   ├── predict_geo.py             # Georeferenced GeoTIFF inference
+│   └── ingest_s2.py               # Sentinel-2 fetch (bbox + dates → pair)
 ├── notebooks/                     # Interactive workflows
 │   ├── 01_eda.ipynb               # Exploratory data analysis
 │   ├── 02_training.ipynb          # Training walkthrough
@@ -314,6 +321,131 @@ python scripts/export_onnx.py \
 
 Output includes a full latency comparison table with mean, P50, P95, P99 percentiles.
 
+## Geospatial Output
+
+Most of the pipeline operates on plain image tensors, but real Earth-observation
+work needs results that line up with a map. The `src.geo` module keeps the
+coordinate reference system (CRS) and affine transform intact end to end, so a
+co-registered GeoTIFF pair yields georeferenced products instead of bare PNGs:
+
+- **`change_mask.tif`** — the binary change mask as a GeoTIFF that overlays the
+  source scene directly in QGIS/ArcGIS
+- **`change_polygons.geojson`** — change regions vectorized to WGS84 polygons,
+  each tagged with its **area in hectares** and centroid lon/lat
+- **`change_stats.json`** — changed area, change fraction, and region count
+
+### Georeferenced CLI
+
+```bash
+sat-cd-geo \
+  --checkpoint models/checkpoints/best_model.pth \
+  --image-t1 before.tif \
+  --image-t2 after.tif \
+  --output-dir results/geo \
+  --min-area-m2 500          # ignore change blobs smaller than 500 m²
+```
+
+Large scenes are tiled automatically using the existing sliding-window inference.
+
+### Georeferenced API
+
+The serving layer exposes a geospatial endpoint alongside the PNG one:
+
+```bash
+curl -X POST http://localhost:8000/predict/geotiff \
+  -F "image_t1=@before.tif" \
+  -F "image_t2=@after.tif"
+```
+
+It returns JSON containing a GeoJSON `FeatureCollection` of change polygons
+(WGS84, with per-region area in hectares) plus a `statistics` summary — ready to
+drop straight onto a Leaflet map or into geojson.io.
+
+> **Note:** inputs must be co-registered (same grid) and in the pixel range the
+> model was trained on. The **Sentinel-2 Ingestion** section below produces such
+> a pair automatically from a bounding box and two dates.
+
+## Sentinel-2 Ingestion
+
+The geospatial CLI and API above expect a *co-registered* GeoTIFF pair. The
+`src.ingest` module produces one directly from a bounding box and two dates by
+pulling real imagery from the [Microsoft Planetary
+Computer](https://planetarycomputer.microsoft.com/) STAC catalog — no manual
+downloading, reprojecting, or tile-wrangling.
+
+For each date it searches the `sentinel-2-l2a` collection, picks the
+least-cloudy scene, reprojects it onto a shared UTM grid at your chosen
+resolution, and screens clouds using the Scene Classification Layer (SCL). The
+result is `before.tif` / `after.tif` (already aligned), per-date cloud masks,
+and a `manifest.json` recording exactly which scenes were used.
+
+Install the optional dependencies and run it:
+
+```bash
+pip install -e ".[ingest]"
+
+sat-cd-ingest \
+  --bbox 12.30 45.40 12.45 45.50 \
+  --date-t1 2023-06-01/2023-06-30 \
+  --date-t2 2024-06-01/2024-06-30 \
+  --output-dir data/venice \
+  --resolution 10 \
+  --max-cloud 20
+```
+
+By default it uses Sentinel-2's pre-rendered 8-bit true-colour (`visual`) asset,
+whose value range and band order match the model. Pass
+`--asset bands --bands B04 B03 B02` to stack raw reflectance bands instead.
+
+End to end — from coordinates to change polygons:
+
+```bash
+sat-cd-ingest --bbox 12.30 45.40 12.45 45.50 \
+  --date-t1 2023-06-01/2023-06-30 --date-t2 2024-06-01/2024-06-30 \
+  --output-dir data/venice
+
+sat-cd-geo --checkpoint models/checkpoints/best_model.pth \
+  --image-t1 data/venice/before.tif --image-t2 data/venice/after.tif \
+  --manifest data/venice/manifest.json \
+  --output-dir results/venice
+```
+
+## Cloud-Aware Inference
+
+Cloud arriving or clearing between two acquisition dates is a large radiometric
+change, so an unmasked model reports it as *ground* change. Ingestion already
+computes per-date SCL cloud masks — passing them to `sat-cd-geo` suppresses
+those false positives and reports change against the area that was genuinely
+visible on **both** dates.
+
+```bash
+# --manifest picks up both masks automatically
+sat-cd-geo ... --manifest data/venice/manifest.json
+
+# ...or point at them directly
+sat-cd-geo ... --cloud-mask-t1 data/venice/before_cloud.tif \
+               --cloud-mask-t2 data/venice/after_cloud.tif
+```
+
+A pixel is treated as unobservable if **either** date is obscured, since there is
+nothing to compare against. `change_stats.json` then gains:
+
+| Field | Meaning |
+|-------|---------|
+| `obscured_pixels` / `obscured_fraction` | How much of the AOI was hidden by cloud |
+| `valid_pixels` | Pixels observable on both dates |
+| `change_fraction_of_valid` | Change measured against observed area, not the whole scene |
+| `obscured_area_ha` | Cloud-obscured ground area |
+
+The distinction matters. On a scene where cloud rolled in over one date, the
+unmasked pipeline reported **544 ha** of change across 2 regions; with masking it
+reports **144 ha** across 1 region and flags 19% of the AOI as obscured — the
+other 400 ha was weather, not ground change.
+
+`change_fraction_of_valid` is the number to act on: a 60%-clouded scene can only
+ever observe change over the remaining 40%, and dividing by the full scene makes
+the landscape look more stable than the data supports.
+
 ## Space Applications
 
 This pipeline is directly relevant to:
@@ -322,6 +454,15 @@ This pipeline is directly relevant to:
 - **Environmental monitoring**: Detecting deforestation, desertification, and wetland loss
 - **Agriculture**: Identifying crop rotation patterns and irrigation changes
 - **Defense and intelligence**: Monitoring infrastructure changes at points of interest
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the
+development setup and the exact checks CI runs, and [CHANGELOG.md](CHANGELOG.md)
+for the release history.
+
+To report a security issue, please follow [SECURITY.md](SECURITY.md) rather than
+opening a public issue.
 
 ## Citation
 
