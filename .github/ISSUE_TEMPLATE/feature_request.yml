@@ -1,0 +1,58 @@
+name: Feature request
+description: Suggest a capability, model, data source, or improvement
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: >
+        Describe the use case rather than the implementation. Who needs this and
+        what are they trying to accomplish — monitoring deforestation, tracking
+        urban growth, assessing disaster damage, something else?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which area does this touch?
+      options:
+        - Model architecture or losses
+        - Data loading or augmentation
+        - Geospatial I/O and formats
+        - Imagery sources and ingestion
+        - Serving, API, or deployment
+        - Evaluation, metrics, or benchmarks
+        - Documentation or examples
+        - Other or not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Existing tools or workarounds you have tried.
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: New dependencies
+      description: >
+        Would this require new packages? Heavy or narrowly used dependencies
+        generally belong in an optional extra rather than in requirements.txt.
+
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contribution
+      options:
+        - label: I would be willing to work on this.
