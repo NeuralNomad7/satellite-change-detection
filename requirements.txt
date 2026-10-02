@@ -23,7 +23,7 @@ pyyaml>=6.0.1
 Pillow>=10.2.0
 # 2.0 renamed GaussNoise's var_limit to std_range; src/data_loader.py uses the
 # 2.x API, and the old kwarg is only warned about rather than raising.
-albumentations>=2.0.0
+albumentations>=2.0.8
 
 # Logging and utilities
 tqdm>=4.66.0
