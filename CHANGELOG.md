@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     down to 144 ha / 1 region, with 19% of the AOI flagged as obscured.
 - `tests/test_predict_geo.py` covering the cloud-mask plumbing, plus cloud and
   observability tests in `tests/test_geo.py`.
+- `tests/test_package.py`, which fails if `src.__version__` drifts from
+  `pyproject.toml` or if `requires-python`, the classifiers, Ruff's
+  `target-version`, and the CI test matrix disagree on supported Pythons.
 - `tests/test_data_loader.py`, covering the augmentation pipeline and mask
   decoding. Includes a guard that promotes albumentations' "unrecognized
   argument" `UserWarning` to an error, so a renamed parameter fails CI instead
@@ -32,6 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   set resolves on 3.14, and PyTorch has supported it since 2.12.
 - Dependabot configuration for weekly `pip` and `github-actions` updates, with
   minor/patch bumps grouped into a single pull request.
+- Dependabot also tracks the hook revisions in `.pre-commit-config.yaml`, which
+  had drifted a major version behind the `mypy` that CI installs.
+- A weekly scheduled CI run. `requirements.txt` sets only floors, so an upstream
+  release can break a fresh install without any commit landing here.
 - Community health files: `CONTRIBUTING.md`, `SECURITY.md`, issue forms for bug
   reports and feature requests, and a pull request template.
 - This changelog.
@@ -60,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed the hardcoded `python_version = "3.10"` from the mypy configuration.
   numpy 2.5's stubs use PEP 695 syntax that mypy cannot parse when targeting
   3.10, which broke local type checking outright.
+- `src.__version__` still reported 1.3.0 while the package metadata said 1.4.0.
 
 ### Changed
 - Raised the `albumentations` floor to `>=2.0.0` so the transform API is
@@ -68,10 +76,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to v7. The pinned majors targeted Node 20, which GitHub has deprecated and was
   force-running on Node 24.
 - CI can be triggered manually via `workflow_dispatch`.
+- Raised the dev floors to `ruff>=0.16` and `mypy>=2.3`, and updated the
+  pre-commit hooks to match what CI installs: pre-commit-hooks v6.0.0, Ruff
+  v0.16.10 (via the `ruff-check` hook id; `ruff` is a legacy alias), and mypy
+  v2.4.0.
+- The CI lint and test jobs install the `[ingest]` extra, so mypy checks the
+  `pystac-client` calls and the catalog tests run instead of being skipped.
 
 ### Removed
 - `pandas`, which was unused across `src/`, `scripts/`, `serving/`,
   `streamlit_app.py`, and the notebooks.
+- **Python 3.10 support.** Python 3.10 reached end of life on 2026-10-01 and no
+  longer receives security fixes. `requires-python` is now `>=3.11`, Ruff
+  targets `py311`, and CI tests 3.11 through 3.14. Python 3.15 is not in the
+  matrix yet because torch, torchvision, onnxruntime, and shapely do not publish
+  wheels for it.
+
+### Security
+- Raised the `python-multipart` floor from 0.0.9 to 0.0.32. The serving API's
+  upload endpoints parse multipart bodies with it, and the old floor allowed
+  versions with eight published advisories, four rated high (CVE-2024-53981,
+  CVE-2026-24486, CVE-2026-42561, CVE-2026-53539). 0.0.31 fixed the last of
+  them.
 
 ## [1.3.0] - 2026-06-13
 

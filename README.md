@@ -3,7 +3,7 @@
 A production-ready deep learning pipeline for detecting land-use and land-cover changes from multi-temporal Sentinel-2 satellite imagery. Built with PyTorch, this project implements a Siamese U-Net architecture that compares bi-temporal image pairs to produce pixel-level change maps -- from training to deployment.
 
 [![CI](https://github.com/neuralnomad7/satellite-change-detection/actions/workflows/ci.yml/badge.svg)](https://github.com/neuralnomad7/satellite-change-detection/actions)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 <p align="center">
@@ -139,10 +139,11 @@ graph LR
 
 ```mermaid
 graph LR
-    PUSH["git push"] --> CI["GitHub Actions"]
+    PUSH["git push / PR"] --> CI["GitHub Actions"]
+    SCHED["Weekly schedule\nnewest dependency releases"] --> CI
 
     CI --> LINT["Lint & Format\nRuff · mypy"]
-    CI --> TEST["Test Matrix\nPython 3.10 → 3.13\npytest + coverage"]
+    CI --> TEST["Test Matrix\nPython 3.11 → 3.14\npytest + coverage"]
     CI --> SMOKE["Model Smoke Test\nForward pass shape\nONNX export validation"]
 
     LINT --> PASS["All Checks Pass"]
@@ -150,6 +151,7 @@ graph LR
     SMOKE --> PASS
 
     style PUSH fill:#e3f2fd,stroke:#1565c0,color:#000
+    style SCHED fill:#e3f2fd,stroke:#1565c0,color:#000
     style CI fill:#fff3e0,stroke:#e65100,color:#000
     style PASS fill:#e8f5e9,stroke:#2e7d32,color:#000
 ```
