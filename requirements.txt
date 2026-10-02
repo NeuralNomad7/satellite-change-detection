@@ -30,7 +30,7 @@ tqdm>=4.66.0
 
 # Model serving
 fastapi>=0.110.0
-uvicorn>=0.29.0
+uvicorn>=0.54.0
 # 0.0.31 fixed the last of eight published advisories (four rated high,
 # e.g. CVE-2026-42561 and CVE-2026-53539) that the old 0.0.9 floor allowed.
 python-multipart>=0.0.32
