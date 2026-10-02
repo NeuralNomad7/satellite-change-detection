@@ -13,11 +13,13 @@ from rasterio.crs import CRS
 from rasterio.transform import from_origin
 
 from src.geo import (
+    GeoRaster,
     apply_validity_mask,
     as_boolean_mask,
     change_statistics,
     combine_invalid_masks,
     mask_to_polygons,
+    nodata_mask,
     normalize_imagenet,
     read_geotiff,
     write_geotiff,
@@ -214,6 +216,53 @@ def test_combine_invalid_masks_ignores_none_and_handles_empty():
 def test_combine_invalid_masks_rejects_mismatched_grids():
     with pytest.raises(ValueError, match="share a grid"):
         combine_invalid_masks(np.zeros((4, 4)), np.zeros((5, 5)))
+
+
+def _raster(data, nodata):
+    return GeoRaster(
+        data=np.asarray(data, dtype=np.float32),
+        transform=UTM_TRANSFORM,
+        crs=UTM_CRS,
+        nodata=nodata,
+    )
+
+
+def test_nodata_mask_needs_every_band_to_match():
+    data = np.full((2, 3, 3), 50, dtype=np.float32)
+    data[0, 0] = 0  # empty in all bands
+    data[1, 1, 2] = 0  # a dark blue channel, but real data
+    mask = nodata_mask(_raster(data, nodata=0))
+
+    expected = np.zeros((2, 3), dtype=bool)
+    expected[0, 0] = True
+    np.testing.assert_array_equal(mask, expected)
+
+
+def test_nodata_mask_handles_nan_and_single_band():
+    data = np.ones((2, 2, 1), dtype=np.float32)
+    data[1, 0, 0] = np.nan
+    np.testing.assert_array_equal(
+        nodata_mask(_raster(data, nodata=float("nan"))),
+        [[False, False], [True, False]],
+    )
+
+
+def test_nodata_mask_is_none_when_nothing_is_missing():
+    assert nodata_mask(_raster(np.zeros((2, 2, 3)), nodata=None)) is None
+    assert nodata_mask(_raster(np.ones((2, 2, 3)), nodata=0)) is None
+
+
+def test_nodata_mask_reads_back_from_a_geotiff(tmp_path):
+    data = np.full((4, 4, 3), 120, dtype=np.uint8)
+    data[:, :2] = 0
+    path = tmp_path / "scene.tif"
+    write_geotiff(
+        path, data, transform=UTM_TRANSFORM, crs=UTM_CRS, nodata=0, dtype="uint8"
+    )
+
+    mask = nodata_mask(read_geotiff(path))
+
+    assert mask.sum() == 8 and mask[:, :2].all()
 
 
 def test_apply_validity_mask_suppresses_change_under_cloud():

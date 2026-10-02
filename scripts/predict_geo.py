@@ -16,7 +16,7 @@ Usage:
         --image-t2 after.tif \
         --output-dir results/geo
 
-Cloud masking:
+Cloud and no-data masking:
     Cloud arriving or clearing between two dates is a large radiometric change,
     so an unmasked model reports it as ground change. Pass the per-date cloud
     masks written by ``sat-cd-ingest`` to suppress those false positives and to
@@ -25,7 +25,10 @@ Cloud masking:
         python scripts/predict_geo.py ... --manifest data/venice/manifest.json
 
     ``--manifest`` picks up both masks automatically; ``--cloud-mask-t1`` and
-    ``--cloud-mask-t2`` override it or work standalone.
+    ``--cloud-mask-t2`` override it or work standalone. Independently of the
+    masks, pixels that hold an input GeoTIFF's declared nodata value in every
+    band (``sat-cd-ingest`` writes ``0`` wherever a scene has no data) are
+    always excluded.
 
 Note:
     This expects the two GeoTIFFs to already be co-registered (same grid) and in
@@ -54,12 +57,26 @@ from src.geo import (
     change_statistics,
     combine_invalid_masks,
     mask_to_polygons,
+    nodata_mask,
     normalize_imagenet,
     read_geotiff,
     save_geojson,
     write_geotiff,
 )
 from src.utils import get_device, set_seed
+
+
+def _manifest_output(manifest: str, listed: str | None) -> str | None:
+    """Resolve a path recorded in a manifest, tolerating a moved output folder.
+
+    ``sat-cd-ingest`` records paths as given at ingest time, often relative to
+    the directory it ran from. When such a path does not exist, fall back to the
+    file of the same name next to the manifest.
+    """
+    if listed is None or Path(listed).exists():
+        return listed
+    sibling = Path(manifest).parent / Path(listed).name
+    return str(sibling) if sibling.exists() else listed
 
 
 def resolve_cloud_mask_paths(
@@ -78,9 +95,9 @@ def resolve_cloud_mask_paths(
         with open(manifest) as f:
             outputs = json.load(f).get("outputs", {})
         if t1 is None:
-            t1 = outputs.get("before_cloud")
+            t1 = _manifest_output(manifest, outputs.get("before_cloud"))
         if t2 is None:
-            t2 = outputs.get("after_cloud")
+            t2 = _manifest_output(manifest, outputs.get("after_cloud"))
         if t1 is None and t2 is None:
             print(
                 f"Warning: {manifest} lists no cloud masks "
@@ -192,13 +209,13 @@ def _parse_args() -> argparse.Namespace:
         "--cloud-mask-t1",
         type=str,
         default=None,
-        help="Cloud mask GeoTIFF for the pre-change date (nonzero = cloud)",
+        help="Cloud mask GeoTIFF for the pre-change date (nonzero = cloud or no data)",
     )
     parser.add_argument(
         "--cloud-mask-t2",
         type=str,
         default=None,
-        help="Cloud mask GeoTIFF for the post-change date (nonzero = cloud)",
+        help="Cloud mask GeoTIFF for the post-change date (nonzero = cloud or no data)",
     )
     parser.add_argument(
         "--device", type=str, default=None, help="Device override (e.g. 'cpu')"
@@ -260,19 +277,23 @@ def main() -> None:
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Suppress change wherever either date was under cloud -- otherwise weather
-    # between acquisitions shows up as ground change.
+    # Suppress change wherever either date was under cloud or held no data --
+    # otherwise weather and scene edges show up as ground change.
     cloud_t1, cloud_t2 = resolve_cloud_mask_paths(
         args.manifest, args.cloud_mask_t1, args.cloud_mask_t2
     )
-    invalid_mask = load_invalid_mask(cloud_t1, cloud_t2, mask.shape[:2])
+    invalid_mask = combine_invalid_masks(
+        load_invalid_mask(cloud_t1, cloud_t2, mask.shape[:2]),
+        nodata_mask(raster1),
+        nodata_mask(raster2),
+    )
     if invalid_mask is not None:
         raw_changed = int((mask > 0).sum())
         mask = apply_validity_mask(mask, invalid_mask)
         suppressed = raw_changed - int(mask.sum())
         print(
-            f"Cloud masking: {int(invalid_mask.sum()):,} obscured pixels; "
-            f"suppressed {suppressed:,} change pixels."
+            f"Validity masking: {int(invalid_mask.sum()):,} obscured pixels "
+            f"(cloud or no data); suppressed {suppressed:,} change pixels."
         )
 
     mask_path = out_dir / "change_mask.tif"
@@ -314,7 +335,10 @@ def main() -> None:
     if stats["changed_area_ha"] is not None:
         print(f"  Changed area   : {stats['changed_area_ha']:.2f} ha")
     if "obscured_fraction" in stats:
-        print(f"  Cloud obscured : {stats['obscured_fraction']:.2%} of the AOI")
+        print(
+            f"  Obscured       : {stats['obscured_fraction']:.2%} of the AOI "
+            "(cloud or no data)"
+        )
         if stats["change_fraction_of_valid"] is not None:
             print(f"  Change / valid : {stats['change_fraction_of_valid']:.4f}")
     print(f"{'=' * 50}")

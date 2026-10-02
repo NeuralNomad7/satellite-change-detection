@@ -22,8 +22,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     observed rather than the whole scene.
   - On a scene where cloud covered one date, this cut a 544 ha / 2-region report
     down to 144 ha / 1 region, with 19% of the AOI flagged as obscured.
+- **AOI-aware scene selection in `sat-cd-ingest`.** Candidates are ranked by how
+  much of the AOI their data footprint covers times their clear-sky fraction,
+  with reprocessed copies of one acquisition collapsed to the newest. The SCL of
+  the top `--candidates` (default 3) is then read over the AOI, and the scene
+  with the fewest cloudy or empty AOI pixels wins. New in `src.ingest`:
+  `aoi_coverage`, `rank_candidates`, `invalid_fraction`, `select_scene`,
+  `check_scene_pair`, `boa_offset_for_item`, and `validate_bbox`.
+- **Provenance in the ingestion manifest.** Each scene now also records its
+  platform, MGRS tile, processing baseline, AOI no-data fraction, and how many
+  candidates were found and checked (plus the BOA offset removed, in bands
+  mode). The manifest records when it was made, the package version, the STAC
+  endpoint and collection, the original request, the nodata value, and what each
+  cloud-mask value means.
+- `src.geo.nodata_mask`, which finds the pixels holding a raster's declared
+  nodata value in every band.
 - `tests/test_predict_geo.py` covering the cloud-mask plumbing, plus cloud and
   observability tests in `tests/test_geo.py`.
+- `tests/test_ingest_cli.py` for `sat-cd-ingest`'s argument checks and error
+  reporting, and `tests/test_package.py`, which fails if `src.__version__`
+  drifts from `pyproject.toml` or if `requires-python`, the classifiers, Ruff's
+  `target-version`, and the CI test matrix disagree on supported Pythons.
 - `tests/test_data_loader.py`, covering the augmentation pipeline and mask
   decoding. Includes a guard that promotes albumentations' "unrecognized
   argument" `UserWarning` to an error, so a renamed parameter fails CI instead
@@ -32,6 +51,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   set resolves on 3.14, and PyTorch has supported it since 2.12.
 - Dependabot configuration for weekly `pip` and `github-actions` updates, with
   minor/patch bumps grouped into a single pull request.
+- Dependabot also tracks the hook revisions in `.pre-commit-config.yaml`, which
+  had drifted a major version behind the `mypy` that CI installs.
+- A weekly scheduled CI run. `requirements.txt` sets only floors, so an upstream
+  release can break a fresh install without any commit landing here.
 - Community health files: `CONTRIBUTING.md`, `SECURITY.md`, issue forms for bug
   reports and feature requests, and a pull request template.
 - This changelog.
@@ -60,6 +83,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed the hardcoded `python_version = "3.10"` from the mypy configuration.
   numpy 2.5's stubs use PEP 695 syntax that mypy cannot parse when targeting
   3.10, which broke local type checking outright.
+- **Sentinel-2 ingestion**, found by checking 1.3.0's output against live
+  Planetary Computer data:
+  - **It could pick a scene that barely covered the AOI.** Selection used only
+    the tile-wide `eo:cloud_cover`. For the README's Venice example it chose a
+    June 2024 scene covering 5.3% of the AOI, leaving 93.6% of the output empty,
+    over a scene from the same overpass with 0.6 points more cloud that covers
+    all of it.
+  - **Ground a scene didn't cover was written as valid black pixels.** The SCL
+    no-data classes were computed and then discarded, and the images declared no
+    nodata value, so swath edges reached the model as real imagery. Such pixels
+    are now `0` in every band and `255` in the cloud mask, declared as nodata in
+    both, and `sat-cd-geo` excludes them even without masks.
+  - **Cloud masks declared `0`, the value for clear sky, as nodata**, so GIS
+    tools hid every clear pixel. Masks now hold `0` clear, `1` cloud and `255`
+    no data, with `255` declared.
+  - **Bands mode mixed reflectance scales.** Processing baseline 04.00 (January
+    2022) added a +1000 DN offset to L2A reflectance, so a pair from either side
+    of it showed uniform brightening. Each scene's offset is now derived from its
+    `s2:processing_baseline` and removed before scaling. The `visual` asset was
+    unaffected.
+  - **Search could miss the best scenes.** A scene exactly at `--max-cloud` was
+    excluded (`lt` rather than `lte`), and the 50-result cap was applied in the
+    server's default order, so a long window could drop its clearest scenes.
+    Results are now sorted least-cloudy first.
+  - **Overlapping date windows could compare a scene with itself**, including
+    reprocessed copies whose ids differ only in their processing timestamp.
+    Ingestion now stops before writing anything, and warns if the "after" scene
+    is older than the "before" one.
+  - **Swath edges had a dark fringe.** The Planetary Computer COGs declare no
+    nodata value, so bilinear resampling averaged the zero fill into edge
+    pixels. Reprojection now treats `0` as source nodata.
+  - **The suggested `sat-cd-geo` command left out `--manifest`**, so following
+    it skipped cloud masking. It is now included whenever masks were written.
+  - **Invalid arguments were accepted and routine failures produced
+    tracebacks.** Arguments are now validated up front, and failures such as an
+    empty date window, a network error, or a missing `[ingest]` extra print a
+    one-line `error:` and exit 1.
+- `sat-cd-geo --manifest` now finds the masks next to the manifest when the
+  ingestion folder has moved since the paths in it were recorded.
+- `src.__version__` still reported 1.3.0 while the package metadata said 1.4.0.
 
 ### Changed
 - Raised the `albumentations` floor to `>=2.0.0` so the transform API is
@@ -68,10 +131,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to v7. The pinned majors targeted Node 20, which GitHub has deprecated and was
   force-running on Node 24.
 - CI can be triggered manually via `workflow_dispatch`.
+- **Remote reads are more resilient.** STAC requests time out after 60 s instead
+  of waiting indefinitely, and COG reads retry transient HTTP failures and skip
+  sidecar-file probing; GDAL settings already in the environment take
+  precedence. The `pystac-client` floor is now `>=0.8.3`, the first release that
+  applies the timeout.
+- Raised the dev floors to `ruff>=0.16` and `mypy>=2.3`, and updated the
+  pre-commit hooks to match what CI installs: pre-commit-hooks v6.0.0, Ruff
+  v0.16.10 (via the `ruff-check` hook id; `ruff` is a legacy alias), and mypy
+  v2.4.0.
+- The CI lint and test jobs install the `[ingest]` extra, so mypy checks the
+  `pystac-client` calls and the catalog tests run instead of being skipped.
 
 ### Removed
 - `pandas`, which was unused across `src/`, `scripts/`, `serving/`,
   `streamlit_app.py`, and the notebooks.
+- **Python 3.10 support.** Python 3.10 reached end of life on 2026-10-01 and no
+  longer receives security fixes. `requires-python` is now `>=3.11`, Ruff
+  targets `py311`, and CI tests 3.11 through 3.14. Python 3.15 is not in the
+  matrix yet because torch, torchvision, onnxruntime, and shapely do not publish
+  wheels for it.
+
+### Security
+- Raised the `python-multipart` floor from 0.0.9 to 0.0.32. The serving API's
+  upload endpoints parse multipart bodies with it, and the old floor allowed
+  versions with eight published advisories, four rated high (CVE-2024-53981,
+  CVE-2026-24486, CVE-2026-42561, CVE-2026-53539). 0.0.31 fixed the last of
+  them.
 
 ## [1.3.0] - 2026-06-13
 
