@@ -3,7 +3,7 @@
 A production-ready deep learning pipeline for detecting land-use and land-cover changes from multi-temporal Sentinel-2 satellite imagery. Built with PyTorch, this project implements a Siamese U-Net architecture that compares bi-temporal image pairs to produce pixel-level change maps -- from training to deployment.
 
 [![CI](https://github.com/neuralnomad7/satellite-change-detection/actions/workflows/ci.yml/badge.svg)](https://github.com/neuralnomad7/satellite-change-detection/actions)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 <p align="center">
@@ -139,10 +139,11 @@ graph LR
 
 ```mermaid
 graph LR
-    PUSH["git push"] --> CI["GitHub Actions"]
+    PUSH["git push / PR"] --> CI["GitHub Actions"]
+    SCHED["Weekly schedule\nnewest dependency releases"] --> CI
 
     CI --> LINT["Lint & Format\nRuff · mypy"]
-    CI --> TEST["Test Matrix\nPython 3.10 → 3.13\npytest + coverage"]
+    CI --> TEST["Test Matrix\nPython 3.11 → 3.14\npytest + coverage"]
     CI --> SMOKE["Model Smoke Test\nForward pass shape\nONNX export validation"]
 
     LINT --> PASS["All Checks Pass"]
@@ -150,6 +151,7 @@ graph LR
     SMOKE --> PASS
 
     style PUSH fill:#e3f2fd,stroke:#1565c0,color:#000
+    style SCHED fill:#e3f2fd,stroke:#1565c0,color:#000
     style CI fill:#fff3e0,stroke:#e65100,color:#000
     style PASS fill:#e8f5e9,stroke:#2e7d32,color:#000
 ```
@@ -373,11 +375,11 @@ pulling real imagery from the [Microsoft Planetary
 Computer](https://planetarycomputer.microsoft.com/) STAC catalog — no manual
 downloading, reprojecting, or tile-wrangling.
 
-For each date it searches the `sentinel-2-l2a` collection, picks the
-least-cloudy scene, reprojects it onto a shared UTM grid at your chosen
-resolution, and screens clouds using the Scene Classification Layer (SCL). The
-result is `before.tif` / `after.tif` (already aligned), per-date cloud masks,
-and a `manifest.json` recording exactly which scenes were used.
+For each date it searches the `sentinel-2-l2a` collection, picks the scene that
+sees the most of your AOI clearly, reprojects it onto a shared UTM grid at your
+chosen resolution, and screens clouds using the Scene Classification Layer
+(SCL). The result is `before.tif` / `after.tif` (already aligned), per-date
+cloud masks, and a `manifest.json` recording exactly which scenes were used.
 
 Install the optional dependencies and run it:
 
@@ -396,6 +398,49 @@ sat-cd-ingest \
 By default it uses Sentinel-2's pre-rendered 8-bit true-colour (`visual`) asset,
 whose value range and band order match the model. Pass
 `--asset bands --bands B04 B03 B02` to stack raw reflectance bands instead.
+Scenes processed with baseline 04.00 or later (the default since January 2022)
+store reflectance 1000 DN higher; bands mode reads each scene's baseline and
+removes that offset first, so pairs from either side of that change stay
+comparable.
+
+### How each scene is chosen
+
+Scene-level cloud cover describes a whole 110 km tile, and neighbouring tiles
+overlap, so the least-cloudy match is often a poor pick. In the Venice example
+above, the least-cloudy June 2024 scene covers only about 5% of the AOI, while
+a scene from the same overpass with almost the same cloud cover (13.9% against
+13.3%) covers all of it. Selection therefore runs in two steps:
+
+1. **Rank** every scene at or under `--max-cloud` by the share of the AOI inside
+   its data footprint times its clear-sky fraction. Reprocessed copies of the
+   same acquisition collapse to the newest.
+2. **Check** the top `--candidates` scenes (default 3) by reading their SCL over
+   the AOI, and keep the one with the fewest cloudy or empty AOI pixels. A
+   candidate that sees the whole AOI clearly ends the check early.
+
+If both date windows resolve to the same acquisition, usually because they
+overlap, ingestion stops before writing anything; an "after" scene older than
+the "before" one gets a warning. Arguments are checked before anything is
+searched, so an out-of-range or inverted bbox fails straight away, and expected
+failures such as an empty date window print a one-line `error:` message rather
+than a traceback.
+
+### Outputs
+
+| File | Contents |
+|------|----------|
+| `before.tif` / `after.tif` | RGB `uint8` on the shared grid. `0` in every band is no data, and is declared as the GeoTIFF's nodata value |
+| `before_cloud.tif` / `after_cloud.tif` | `0` clear, `1` cloud, cirrus or cloud shadow, `255` no data. Skip with `--no-cloud-masks` |
+| `manifest.json` | The request, the grid, both chosen scenes and the output paths |
+
+Parts of the AOI that a scene doesn't cover, such as beyond the edge of the
+orbit swath, are flagged as no data in both the image and its mask instead of
+being left as plain black pixels, so they can't be mistaken for change.
+Each scene in the manifest records its STAC item id, acquisition time,
+platform, MGRS tile, processing baseline, scene cloud cover, AOI cloud and
+no-data fractions, and how many candidates were found and checked (plus the
+`boa_offset` applied in bands mode). The manifest also records the STAC
+endpoint and the package version that produced it.
 
 End to end — from coordinates to change polygons:
 
@@ -419,7 +464,8 @@ those false positives and reports change against the area that was genuinely
 visible on **both** dates.
 
 ```bash
-# --manifest picks up both masks automatically
+# --manifest picks up both masks automatically (even if the output folder has
+# moved since ingestion, as long as the masks are still next to the manifest)
 sat-cd-geo ... --manifest data/venice/manifest.json
 
 # ...or point at them directly
@@ -428,14 +474,17 @@ sat-cd-geo ... --cloud-mask-t1 data/venice/before_cloud.tif \
 ```
 
 A pixel is treated as unobservable if **either** date is obscured, since there is
-nothing to compare against. `change_stats.json` then gains:
+nothing to compare against. Missing data counts too: `sat-cd-geo` always skips
+pixels that hold an input GeoTIFF's declared nodata value in every band, which
+is how `sat-cd-ingest` marks ground a scene didn't cover, with or without masks.
+`change_stats.json` then gains:
 
 | Field | Meaning |
 |-------|---------|
-| `obscured_pixels` / `obscured_fraction` | How much of the AOI was hidden by cloud |
+| `obscured_pixels` / `obscured_fraction` | How much of the AOI was hidden by cloud or had no data |
 | `valid_pixels` | Pixels observable on both dates |
 | `change_fraction_of_valid` | Change measured against observed area, not the whole scene |
-| `obscured_area_ha` | Cloud-obscured ground area |
+| `obscured_area_ha` | Ground area hidden by cloud or missing data |
 
 The distinction matters. On a scene where cloud rolled in over one date, the
 unmasked pipeline reported **544 ha** of change across 2 regions; with masking it

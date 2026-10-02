@@ -370,6 +370,29 @@ def combine_invalid_masks(*masks: np.ndarray | None) -> np.ndarray | None:
     return combined
 
 
+def nodata_mask(raster: GeoRaster) -> np.ndarray | None:
+    """Pixels where every band holds the raster's declared nodata value.
+
+    ``sat-cd-ingest`` writes ``0`` in all bands wherever a scene has no data and
+    declares ``0`` as the GeoTIFF's nodata value, so this recovers those pixels
+    for :func:`combine_invalid_masks`. Requiring *every* band to match keeps
+    genuinely dark pixels with one empty channel.
+
+    Returns:
+        A boolean ``(H, W)`` mask, or ``None`` if the raster declares no nodata
+        value or no pixel matches it.
+    """
+    if raster.nodata is None:
+        return None
+    nodata = float(raster.nodata)
+    data = raster.data if raster.data.ndim == 3 else raster.data[:, :, np.newaxis]
+    if np.isnan(nodata):
+        empty = np.all(np.isnan(data), axis=2)
+    else:
+        empty = np.all(data == nodata, axis=2)
+    return empty if empty.any() else None
+
+
 def apply_validity_mask(
     change_mask: np.ndarray, invalid_mask: np.ndarray | None
 ) -> np.ndarray:
