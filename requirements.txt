@@ -14,7 +14,7 @@ shapely>=2.0.0
 matplotlib>=3.8.0
 
 # Experiment tracking
-tensorboard>=2.16.0
+tensorboard>=2.21.0
 
 # Configuration
 pyyaml>=6.0.1
