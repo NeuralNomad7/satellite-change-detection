@@ -1,10 +1,10 @@
 """Fetch a co-registered Sentinel-2 pair for an area of interest.
 
-Given a bounding box and two dates (or date ranges), this downloads the
-least-cloudy Sentinel-2 L2A scene for each from the Microsoft Planetary Computer,
-reprojects both onto a shared grid, and writes ``before.tif`` / ``after.tif``
-(plus SCL cloud masks and a ``manifest.json``). The outputs feed straight into
-``sat-cd-geo`` for georeferenced change detection.
+Given a bounding box and two dates (or date ranges), this picks the Sentinel-2
+L2A scene that sees the most of the area clearly for each date on the Microsoft
+Planetary Computer, reprojects both onto a shared grid, and writes
+``before.tif`` / ``after.tif`` (plus cloud masks and a ``manifest.json``). The
+outputs feed straight into ``sat-cd-geo`` for georeferenced change detection.
 
 Requires the optional ingestion dependencies::
 
@@ -24,11 +24,20 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import math
+import sys
+from collections.abc import Sequence
 
-from src.ingest import RGB_BANDS, VISUAL_ASSET, ingest_pair
+from src.ingest import (
+    DEFAULT_CANDIDATES,
+    RGB_BANDS,
+    VISUAL_ASSET,
+    ingest_pair,
+    validate_bbox,
+)
 
 
-def _parse_args() -> argparse.Namespace:
+def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Fetch a co-registered Sentinel-2 L2A pair for change detection"
     )
@@ -62,7 +71,16 @@ def _parse_args() -> argparse.Namespace:
         "--max-cloud",
         type=float,
         default=20.0,
-        help="Maximum scene-level cloud cover percent to consider",
+        help="Maximum scene-level cloud cover percent to consider (0-100)",
+    )
+    parser.add_argument(
+        "--candidates",
+        type=int,
+        default=DEFAULT_CANDIDATES,
+        help=(
+            "Scenes per date whose cloud mask is checked over the AOI before "
+            "choosing (default: %(default)s)"
+        ),
     )
     parser.add_argument(
         "--asset",
@@ -93,28 +111,69 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--no-cloud-masks",
         action="store_true",
-        help="Skip writing per-date SCL cloud-mask GeoTIFFs",
+        help="Skip writing per-date cloud-mask GeoTIFFs",
     )
-    return parser.parse_args()
+    args = parser.parse_args(argv)
+
+    try:
+        args.bbox = list(validate_bbox(args.bbox))
+    except ValueError as e:
+        parser.error(str(e))
+    if not 0.0 <= args.max_cloud <= 100.0:
+        parser.error(f"--max-cloud must be between 0 and 100, got {args.max_cloud}")
+    if not (math.isfinite(args.resolution) and args.resolution > 0):
+        parser.error(f"--resolution must be positive, got {args.resolution}")
+    if not (math.isfinite(args.reflectance_ceiling) and args.reflectance_ceiling > 0):
+        parser.error(
+            f"--reflectance-ceiling must be positive, got {args.reflectance_ceiling}"
+        )
+    if args.candidates < 1:
+        parser.error(f"--candidates must be at least 1, got {args.candidates}")
+    return args
 
 
-def main() -> None:
-    args = _parse_args()
+def _expected_errors() -> tuple[type[BaseException], ...]:
+    """Errors worth a one-line message instead of a traceback.
 
-    print(f"Searching Sentinel-2 L2A over bbox {args.bbox} ...")
-    manifest = ingest_pair(
-        bbox=args.bbox,
-        datetime_t1=args.date_t1,
-        datetime_t2=args.date_t2,
-        output_dir=args.output_dir,
-        resolution=args.resolution,
-        asset=args.asset,
-        bands=args.bands,
-        max_cloud=args.max_cloud,
-        dst_crs=args.dst_crs,
-        reflectance_ceiling=args.reflectance_ceiling,
-        write_cloud_masks=not args.no_cloud_masks,
+    ``OSError`` covers rasterio read failures and ``requests`` network errors.
+    """
+    errors: tuple[type[BaseException], ...] = (
+        ValueError,
+        KeyError,
+        ImportError,
+        OSError,
     )
+    try:
+        from pystac_client.exceptions import APIError
+    except ImportError:
+        return errors
+    return (*errors, APIError)
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    args = _parse_args(argv)
+
+    print(f"Searching Sentinel-2 L2A over bbox {args.bbox} ...", flush=True)
+    try:
+        manifest = ingest_pair(
+            bbox=args.bbox,
+            datetime_t1=args.date_t1,
+            datetime_t2=args.date_t2,
+            output_dir=args.output_dir,
+            resolution=args.resolution,
+            asset=args.asset,
+            bands=args.bands,
+            max_cloud=args.max_cloud,
+            dst_crs=args.dst_crs,
+            reflectance_ceiling=args.reflectance_ceiling,
+            write_cloud_masks=not args.no_cloud_masks,
+            candidates=args.candidates,
+        )
+    except _expected_errors() as e:
+        # KeyError's str() wraps the message in quotes.
+        message = e.args[0] if isinstance(e, KeyError) and e.args else e
+        print(f"error: {message}", file=sys.stderr)
+        sys.exit(1)
 
     grid = manifest["grid"]
     print(f"\n{'=' * 56}")
@@ -127,20 +186,31 @@ def main() -> None:
         cover_str = f"{cover:.1f}%" if cover is not None else "n/a"
         print(
             f"  {label.capitalize():7}: {scene['item_id']}\n"
-            f"           {scene['datetime']}  "
-            f"scene cloud {cover_str}, AOI cloud {scene['aoi_cloud_fraction']:.1%}"
+            f"           {scene['datetime']}  tile {scene['mgrs_tile'] or 'n/a'}, "
+            f"baseline {scene['processing_baseline'] or 'n/a'}\n"
+            f"           scene cloud {cover_str}, "
+            f"AOI cloud {scene['aoi_cloud_fraction']:.1%}, "
+            f"AOI no data {scene['aoi_nodata_fraction']:.1%}\n"
+            f"           best of {scene['candidates_evaluated']} checked "
+            f"({scene['candidates_found']} found)"
         )
     print(f"{'=' * 56}")
     for key in ("before", "after"):
         print(f"  {key:7} -> {manifest['outputs'][key]}")
     print(f"  manifest-> {manifest['outputs']['manifest']}")
 
-    before = manifest["outputs"]["before"]
-    after = manifest["outputs"]["after"]
+    outputs = manifest["outputs"]
+    masks_flag = (
+        f" \\\n    --manifest {outputs['manifest']}"
+        if "before_cloud" in outputs
+        else ""
+    )
     print("\nNext, run change detection on the pair:")
     print(
         f"  sat-cd-geo --checkpoint models/checkpoints/best_model.pth \\\n"
-        f"    --image-t1 {before} --image-t2 {after} --output-dir results/geo"
+        f"    --image-t1 {outputs['before']} --image-t2 {outputs['after']}"
+        f"{masks_flag} \\\n"
+        f"    --output-dir results/geo"
     )
 
 

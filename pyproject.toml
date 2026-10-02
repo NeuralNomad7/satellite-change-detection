@@ -50,7 +50,8 @@ dev = [
 # Sentinel-2 STAC ingestion (sat-cd-ingest). Optional: only needed to fetch
 # real imagery from the Microsoft Planetary Computer.
 ingest = [
-    "pystac-client>=0.7",
+    # 0.8.3 is the first release that applies the `timeout` passed to Client.open.
+    "pystac-client>=0.8.3",
     "planetary-computer>=1.0",
 ]
 

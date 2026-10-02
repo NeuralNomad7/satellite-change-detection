@@ -68,6 +68,28 @@ def test_manifest_without_cloud_masks_warns_and_continues(tmp_path, capsys):
     assert "no cloud masks" in capsys.readouterr().out
 
 
+def test_resolve_finds_masks_next_to_a_moved_manifest(tmp_path):
+    # The output folder was moved after ingestion: the recorded paths are stale,
+    # but the masks still sit next to the manifest.
+    gone = tmp_path / "original"
+    moved = tmp_path / "moved"
+    moved.mkdir()
+    before = _write_cloud(moved, "before_cloud.tif", np.zeros((4, 4), np.uint8))
+    manifest = _write_manifest(
+        moved,
+        {
+            "before_cloud": str(gone / "before_cloud.tif"),
+            "after_cloud": str(gone / "after_cloud.tif"),
+        },
+    )
+
+    # A file found nowhere keeps its recorded path, so the error names it.
+    assert resolve_cloud_mask_paths(manifest, None, None) == (
+        before,
+        str(gone / "after_cloud.tif"),
+    )
+
+
 def test_load_invalid_mask_unions_both_dates(tmp_path):
     t1 = np.zeros((16, 16), dtype=np.uint8)
     t1[:4, :] = 1
