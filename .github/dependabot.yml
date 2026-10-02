@@ -29,3 +29,16 @@ updates:
     groups:
       actions:
         update-types: ["minor", "patch"]
+
+  # Hook revisions pinned in .pre-commit-config.yaml
+  - package-ecosystem: pre-commit
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    labels: ["dependencies", "pre-commit"]
+    commit-message:
+      prefix: "ci"
+    groups:
+      pre-commit-hooks:
+        patterns: ["*"]

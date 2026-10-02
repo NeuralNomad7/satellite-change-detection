@@ -7,7 +7,7 @@ name = "satellite-change-detection"
 version = "1.4.0"
 description = "Deep learning pipeline for satellite imagery change detection using Sentinel-2 data"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "NeuralNomad7" }]
@@ -25,7 +25,6 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Scientific/Engineering :: GIS",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -42,8 +41,10 @@ Issues = "https://github.com/neuralnomad7/satellite-change-detection/issues"
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
-    "ruff>=0.6",
-    "mypy>=1.10",
+    # Keep these floors in step with the hook revisions in .pre-commit-config.yaml
+    # so a stale local install can't format or type-check differently from CI.
+    "ruff>=0.16",
+    "mypy>=2.3",
     "pre-commit>=3.7",
 ]
 # Sentinel-2 STAC ingestion (sat-cd-ingest). Optional: only needed to fetch
@@ -68,7 +69,7 @@ dependencies = { file = ["requirements.txt"] }
 
 [tool.ruff]
 line-length = 88
-target-version = "py310"
+target-version = "py311"
 extend-exclude = ["notebooks"]
 
 [tool.ruff.lint]
@@ -80,9 +81,10 @@ known-first-party = ["src", "scripts"]
 
 [tool.mypy]
 # Intentionally not pinning python_version: modern dependency stubs (numpy 2.5+)
-# use PEP 695 syntax that mypy cannot parse when asked to target 3.10. Ruff's
-# target-version = "py310" and the 3.10 entry in the CI test matrix are what
-# guard minimum-version compatibility.
+# use PEP 695 syntax that mypy cannot parse when asked to target 3.11. Ruff's
+# target-version = "py311" and the 3.11 entry in the CI test matrix are what
+# guard minimum-version compatibility; tests/test_package.py keeps those in
+# sync with requires-python and the classifiers.
 files = ["src"]
 ignore_missing_imports = true
 strict_optional = false

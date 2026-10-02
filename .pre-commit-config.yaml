@@ -1,6 +1,8 @@
+# Revisions are kept current by Dependabot (see .github/dependabot.yml); keep the
+# ruff and mypy floors in pyproject.toml's dev extra in step with them.
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
@@ -9,14 +11,14 @@ repos:
       - id: check-merge-conflict
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.16
+    rev: v0.16.10
     hooks:
-      - id: ruff
+      - id: ruff-check
         args: [--fix]
       - id: ruff-format
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.13.0
+    rev: v2.4.0
     hooks:
       - id: mypy
         args: [--ignore-missing-imports, --no-strict-optional]
