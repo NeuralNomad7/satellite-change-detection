@@ -123,6 +123,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `sat-cd-geo --manifest` now finds the masks next to the manifest when the
   ingestion folder has moved since the paths in it were recorded.
 - `src.__version__` still reported 1.3.0 while the package metadata said 1.4.0.
+- **Docker images failed to build.** Both Dockerfiles installed
+  `libgl1-mesa-glx`, which Debian removed in bookworm, so `apt-get` failed on
+  the trixie-based `python:3.12-slim`. They now install `libgl1`. The API image
+  also no longer installs `libgdal-dev` (rasterio's wheels bundle GDAL), and
+  neither image reinstalls packages already listed in `requirements.txt`.
+- The `torch` floor was `>=2.6.0`, but the `torchvision>=0.29.0` floor already
+  required `torch>=2.14.0`. The floor now says so.
 
 ### Changed
 - Raised the `albumentations` floor to `>=2.0.0` so the transform API is
@@ -140,6 +147,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pre-commit hooks to match what CI installs: pre-commit-hooks v6.0.0, Ruff
   v0.16.10 (via the `ruff-check` hook id; `ruff` is a legacy alias), and mypy
   v2.4.0.
+- Raised the dev floor to `ruff>=0.17` and the Ruff pre-commit hook to v0.17.0.
+  Lint, type checks, the test suite, and the ONNX export all pass against the
+  newest release of every dependency (torch 2.14.1, numpy 2.4, fastapi 0.143,
+  streamlit 1.66, pytest 9.1).
 - The CI lint and test jobs install the `[ingest]` extra, so mypy checks the
   `pystac-client` calls and the catalog tests run instead of being skipped.
 
