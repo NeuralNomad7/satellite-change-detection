@@ -366,22 +366,22 @@
 
   <!-- Benchmark metrics -->
   <g transform="translate(30, 370)">
-    <text x="0" y="0" fill="#8b949e" font-size="10" font-weight="600" letter-spacing="1.5">LEVIR-CD BENCHMARK</text>
+    <text x="0" y="0" fill="#8b949e" font-size="10" font-weight="600" letter-spacing="1.5">LEVIR-CD METRICS · PENDING FIRST RECORDED RUN</text>
 
     <rect x="0" y="14" width="110" height="48" rx="8" fill="#1c2333" stroke="#30363d"/>
-    <text x="55" y="36" text-anchor="middle" fill="#58a6ff" font-size="20" font-weight="700">0.87</text>
+    <text x="55" y="36" text-anchor="middle" fill="#58a6ff" font-size="20" font-weight="700">—</text>
     <text x="55" y="52" text-anchor="middle" fill="#8b949e" font-size="9">F1 Score</text>
 
     <rect x="120" y="14" width="110" height="48" rx="8" fill="#1c2333" stroke="#30363d"/>
-    <text x="175" y="36" text-anchor="middle" fill="#3fb950" font-size="20" font-weight="700">0.77</text>
+    <text x="175" y="36" text-anchor="middle" fill="#3fb950" font-size="20" font-weight="700">—</text>
     <text x="175" y="52" text-anchor="middle" fill="#8b949e" font-size="9">IoU</text>
 
     <rect x="240" y="14" width="110" height="48" rx="8" fill="#1c2333" stroke="#30363d"/>
-    <text x="295" y="36" text-anchor="middle" fill="#e3b341" font-size="20" font-weight="700">0.89</text>
+    <text x="295" y="36" text-anchor="middle" fill="#e3b341" font-size="20" font-weight="700">—</text>
     <text x="295" y="52" text-anchor="middle" fill="#8b949e" font-size="9">Precision</text>
 
     <rect x="360" y="14" width="110" height="48" rx="8" fill="#1c2333" stroke="#30363d"/>
-    <text x="415" y="36" text-anchor="middle" fill="#f85149" font-size="20" font-weight="700">0.85</text>
+    <text x="415" y="36" text-anchor="middle" fill="#f85149" font-size="20" font-weight="700">—</text>
     <text x="415" y="52" text-anchor="middle" fill="#8b949e" font-size="9">Recall</text>
   </g>
 
