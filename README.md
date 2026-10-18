@@ -1,6 +1,6 @@
 # Satellite Imagery Change Detection
 
-A production-ready deep learning pipeline for detecting land-use and land-cover changes from multi-temporal Sentinel-2 satellite imagery. Built with PyTorch, this project implements a Siamese U-Net architecture that compares bi-temporal image pairs to produce pixel-level change maps -- from training to deployment.
+An end-to-end deep learning pipeline for detecting land-use and land-cover changes from multi-temporal Sentinel-2 satellite imagery. Built with PyTorch, this project implements a Siamese U-Net architecture that compares bi-temporal image pairs to produce pixel-level change maps -- from training to deployment.
 
 [![CI](https://github.com/neuralnomad7/satellite-change-detection/actions/workflows/ci.yml/badge.svg)](https://github.com/neuralnomad7/satellite-change-detection/actions)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
@@ -271,14 +271,16 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design rationale.
 
 ## Results
 
-| Metric     | Value |
-|------------|-------|
-| F1 Score   | 0.87  |
-| IoU        | 0.77  |
-| Precision  | 0.89  |
-| Recall     | 0.85  |
+**Not yet measured.** No trained checkpoint ships with this repository, and no evaluation
+run has been recorded yet, so no scores are claimed.
 
-*Benchmarked on the LEVIR-CD test set.*
+To produce real numbers, train (step 2) and evaluate (step 3) on the LEVIR-CD test split.
+Results will be added here together with the checkpoint's SHA-256, the config used and the
+evaluation log under `results/metrics/`. Published Siamese U-Net baselines on LEVIR-CD
+are the comparison point.
+
+What *is* verified today is the engineering: the test suite, the ingestion and
+geo-inference CLIs, cloud-mask handling, ONNX export and the serving stack.
 
 ## Production Serving
 
