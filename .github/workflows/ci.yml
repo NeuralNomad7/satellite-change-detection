@@ -71,6 +71,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          # CPU wheels: the CUDA build of torch fills the runner's disk.
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
           # The ingest extra is small and pure Python; with it installed the
           # pystac-client paths are tested rather than skipped.
           pip install -e ".[dev,ingest]"
