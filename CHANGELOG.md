@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **README results are now honest.** The LEVIR-CD scores in the README and the
+  pipeline animation were not backed by a recorded run or a shipped checkpoint; they
+  now read "not yet measured" until a run is recorded with its checkpoint hash and
+  evaluation log. The tagline no longer says "production-ready".
+
 ### Added
 - **Cloud-aware inference.** `sat-cd-ingest` already computed per-date SCL cloud
   masks, but nothing consumed them, so cloud arriving or clearing between two
