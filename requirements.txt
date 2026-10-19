@@ -11,7 +11,7 @@ rasterio>=1.4.4
 shapely>=2.0.0
 
 # Visualization
-matplotlib>=3.8.0
+matplotlib>=3.11.2
 
 # Experiment tracking
 tensorboard>=2.21.0
