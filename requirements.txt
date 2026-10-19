@@ -40,4 +40,4 @@ onnx>=1.16.0
 onnxruntime>=1.17.0
 
 # Interactive demo
-streamlit>=1.64.0
+streamlit>=1.66.0
