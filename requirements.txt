@@ -26,7 +26,7 @@ Pillow>=10.2.0
 albumentations>=2.0.8
 
 # Logging and utilities
-tqdm>=4.66.0
+tqdm>=4.70.1
 
 # Model serving
 fastapi>=0.142.2
