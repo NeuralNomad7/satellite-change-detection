@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-22
+
 ### Changed
 - **README results are now honest.** The LEVIR-CD scores in the README and the
   pipeline animation were not backed by a recorded run or a shipped checkpoint; they
@@ -228,7 +230,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial Siamese U-Net change detection pipeline: model, data loading,
   training, and evaluation.
 
-[Unreleased]: https://github.com/neuralnomad7/satellite-change-detection/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/neuralnomad7/satellite-change-detection/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/neuralnomad7/satellite-change-detection/releases/tag/v1.4.0
 [1.3.0]: https://github.com/neuralnomad7/satellite-change-detection/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/neuralnomad7/satellite-change-detection/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/neuralnomad7/satellite-change-detection/compare/v1.0.0...v1.1.0
