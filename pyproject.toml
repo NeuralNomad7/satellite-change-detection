@@ -43,7 +43,7 @@ dev = [
     "pytest-cov>=5.0",
     # Keep these floors in step with the hook revisions in .pre-commit-config.yaml
     # so a stale local install can't format or type-check differently from CI.
-    "ruff>=0.16",
+    "ruff>=0.17",
     "mypy>=2.3",
     "pre-commit>=3.7",
 ]

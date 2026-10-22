@@ -2,17 +2,17 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# System dependencies for image processing
+# System dependencies for image processing. libgl1-mesa-glx was dropped from
+# Debian in bookworm; libgl1 replaces it. GDAL ships inside the rasterio wheels,
+# so no system GDAL is needed.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
-    libgdal-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Install Python dependencies (serving and ONNX packages are in requirements.txt)
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir fastapi uvicorn python-multipart onnx onnxruntime
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source code
 COPY src/ src/
