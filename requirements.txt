@@ -36,7 +36,7 @@ uvicorn>=0.54.0
 python-multipart>=0.0.32
 
 # Model export and optimization
-onnx>=1.16.0
+onnx>=1.23.2
 onnxruntime>=1.17.0
 
 # Interactive demo
