@@ -3,7 +3,7 @@ torch>=2.6.0
 torchvision>=0.29.1
 
 # Scientific computing
-numpy>=1.26.0
+numpy>=2.4.6
 scikit-learn>=1.9.1
 
 # Geospatial / satellite imagery
